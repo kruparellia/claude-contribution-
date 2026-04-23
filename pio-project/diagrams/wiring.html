@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EE6003 Robotic Arm — Wiring Diagrams</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #555;
+    --border: #e4e2d8;
+    --accent: #1565c0;
+    --warn-bg: #fff8e1;
+    --warn-border: #b26500;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;
+      --card: #262626;
+      --text: #f0f0f0;
+      --muted: #b0b0b0;
+      --border: #3a3a3a;
+      --warn-bg: #3a2e10;
+      --warn-border: #d4a040;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 400 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  h1 { font-size: 28px; font-weight: 500; margin: 0 0 0.4rem; }
+  h2 { font-size: 20px; font-weight: 500; margin: 3rem 0 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  p.lead { color: var(--muted); margin: 0 0 2rem; }
+  p { margin: 0 0 1rem; }
+  .meta { font-size: 13px; color: var(--muted); margin: 0 0 1rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+  .card img, .card object { display: block; width: 100%; height: auto; }
+  .callout {
+    background: var(--warn-bg);
+    border-left: 4px solid var(--warn-border);
+    padding: 0.9rem 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+    font-size: 14.5px;
+  }
+  .callout strong { display: block; margin-bottom: 0.2rem; }
+  ol { padding-left: 1.3rem; }
+  li { margin: 0.3rem 0; }
+  .toc { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.2rem; margin: 1.5rem 0 2.5rem; }
+  .toc a { color: var(--accent); text-decoration: none; display: block; padding: 0.2rem 0; }
+  .toc a:hover { text-decoration: underline; }
+  code { background: var(--border); padding: 1px 6px; border-radius: 4px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>EE6003 Robotic Arm — Wiring Diagrams</h1>
+<p class="lead">Visual companion to <code>WIRING.md</code>. Open each diagram in a new tab to zoom.</p>
+
+<div class="toc">
+  <a href="#power">1. Power architecture (read this first)</a>
+  <a href="#divider">2. HC-05 voltage divider (the 2 kΩ / 1 kΩ detail)</a>
+  <a href="#arm">3. Arm side — full wiring</a>
+  <a href="#controller">4. Controller side — full wiring</a>
+</div>
+
+<h2 id="power">1. Power architecture</h2>
+<p class="meta">File: <code>01_power_architecture.svg</code></p>
+
+<div class="card">
+  <img src="01_power_architecture.svg" alt="Power architecture: USB powers the Mega, 4xAA pack powers the servos, grounds shared">
+</div>
+
+<p>This is the single most important diagram. Two separate power sources feed the arm:</p>
+<ol>
+  <li>The <strong>laptop's USB</strong> supplies the Mega (5 V at up to ~500 mA, plenty for the microcontroller).</li>
+  <li>The <strong>4×AA pack</strong> supplies the four servos (≈ 6 V at several amps peak).</li>
+</ol>
+<p>The two supplies share one node: <strong>ground</strong>. Without that common return path, the servo signal from the Mega and the servo's own reference voltage disagree, and the servos twitch or refuse to respond.</p>
+
+<div class="callout">
+  <strong>Never do this</strong>
+  The battery pack's <code>+</code> must not touch the Mega's <code>5V</code> pin, <code>VIN</code>, or any red rail that carries USB 5 V. You'd be shorting two supplies with different voltages — best case, the USB host cuts power; worst case, something smokes.
+</div>
+
+<h2 id="divider">2. HC-05 voltage divider</h2>
+<p class="meta">File: <code>02_hc05_voltage_divider.svg</code></p>
+
+<div class="card">
+  <img src="02_hc05_voltage_divider.svg" alt="Voltage divider with 2k and 1k resistors, dropping 5V to 3.3V on the HC-05 RX line">
+</div>
+
+<p>Both Arduinos in this project output 5 V logic. The HC-05's RX input is rated for 3.3 V. Feeding 5 V straight in works for a while, then kills the module.</p>
+<p>The fix is a resistive divider between the Arduino TX pin and the HC-05 RX pin:</p>
+<ol>
+  <li><strong>R1 = 1 kΩ</strong>, in series, between Arduino TX and the junction.</li>
+  <li><strong>R2 = 2 kΩ</strong>, from the junction down to GND.</li>
+  <li>The HC-05 RX pin connects at the junction itself.</li>
+</ol>
+<p>The voltage at the junction is <code>V_out = V_in × R2 / (R1 + R2) = 5 V × 2 / (1 + 2) ≈ 3.33 V</code> — exactly what the HC-05 wants. If you want belt-and-braces, a proper 3.3 V level shifter IC (TXS0108E, BSS138) is bulletproof and no arithmetic to get wrong.</p>
+
+<h2 id="arm">3. Arm side — full wiring</h2>
+<p class="meta">File: <code>03_arm_wiring.svg</code></p>
+
+<div class="card">
+  <img src="03_arm_wiring.svg" alt="Full arm-side wiring showing Mega 2560, 4 servos, HC-05 with divider, and 4xAA battery pack with common ground">
+</div>
+
+<p>Everything that lives on the arm base. Follow the coloured wires:</p>
+<ol>
+  <li><strong>Red</strong> — 6 V from battery+ up to each servo V+ (shared rail).</li>
+  <li><strong>Dark</strong> — GND. Battery−, all four servo GNDs, and Mega GND all meet at one junction (the common-ground node highlighted on the diagram).</li>
+  <li><strong>Amber</strong> — servo PWM signal wires. D9 → base, D10 → shoulder, D11 → elbow, D6 → claw.</li>
+  <li><strong>Blue</strong> — TX1 (D18) from Mega into the divider, then on to HC-05 RXD.</li>
+  <li><strong>Green</strong> — TXD from HC-05 straight into Mega RX1 (D19). No divider needed because 3.3 V is read as HIGH by the Mega's 5 V input.</li>
+</ol>
+
+<div class="callout">
+  <strong>Bulk capacitor</strong>
+  A 220–470 µF electrolytic across the servo V+/GND rail, close to the servos, prevents brown-outs when all four accelerate at once. Long leg to +, short leg to −. This is a quick win to make the arm move smoothly under the 4×AA pack.
+</div>
+
+<h2 id="controller">4. Controller side — full wiring</h2>
+<p class="meta">File: <code>04_controller_wiring.svg</code></p>
+
+<div class="card">
+  <img src="04_controller_wiring.svg" alt="Full controller-side wiring showing Uno R4 Minima, HW-504 joystick, HC-05 master with divider">
+</div>
+
+<p>The handheld controller has three things attached to the Uno R4 Minima: the joystick, the HC-05 master, and a USB cable (to your laptop during development; later, a power bank or 9 V battery in the Vin jack).</p>
+
+<div class="callout">
+  <strong>Upload gotcha — worth reading twice</strong>
+  The HC-05 TXD wire on D0 blocks USB uploads. Every time you want to re-flash the Uno R4, pop that single jumper off D0, upload, and put it back. The D1 side can stay wired.
+</div>
+
+<p>Joystick mapping in firmware: <code>VRx → A0</code>, <code>VRy → A1</code>, <code>SW → D2</code> (with internal pull-up). If an axis feels backwards once you're moving the arm, flip the sign of <code>jx</code> or <code>jy</code> in <code>controller_uno_r4/main.cpp</code>.</p>
+
+</body>
+</html>

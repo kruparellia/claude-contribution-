@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 460" width="100%" role="img">
+  <title>HC-05 RX voltage divider</title>
+  <desc>A 2 kilohm resistor in series with a 1 kilohm resistor to ground drops the Arduino's 5V TX signal to approximately 3.3V before it reaches the HC-05's RX pin.</desc>
+
+  <style>
+    .ttl { font: 500 22px system-ui, sans-serif; fill: #1a1a1a; }
+    .h   { font: 500 15px system-ui, sans-serif; fill: #1a1a1a; }
+    .lbl { font: 400 13px system-ui, sans-serif; fill: #1a1a1a; }
+    .pin { font: 400 12px monospace; fill: #1a1a1a; }
+    .sub { font: 400 13px system-ui, sans-serif; fill: #555; }
+    .warn{ font: 500 14px system-ui, sans-serif; fill: #b26500; }
+    .sig { stroke: #1565C0; stroke-width: 3; fill: none; stroke-linecap: round; }
+    .gnd { stroke: #263238; stroke-width: 3; fill: none; stroke-linecap: round; }
+    .res { stroke: #1a1a1a; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+    .node{ fill: #263238; }
+  </style>
+
+  <text x="450" y="36" text-anchor="middle" class="ttl">HC-05 RX voltage divider</text>
+  <text x="450" y="60" text-anchor="middle" class="sub">Drops the Arduino's 5 V TX signal to ≈ 3.3 V before it reaches the HC-05 RX</text>
+  <text x="450" y="78" text-anchor="middle" class="sub">V_out = 5 V × R2 / (R1 + R2) = 5 × 2/3 ≈ 3.33 V</text>
+
+  <rect x="60" y="150" width="160" height="110" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.4"/>
+  <text x="140" y="182" text-anchor="middle" class="h" fill="#0C447C">Arduino</text>
+  <text x="140" y="202" text-anchor="middle" class="sub" fill="#0C447C">(Mega D18 or Uno R4 D1)</text>
+  <circle cx="220" cy="205" r="5" class="node"/>
+  <text x="214" y="240" text-anchor="end" class="pin">TX  (5 V)</text>
+
+  <line x1="225" y1="205" x2="290" y2="205" class="sig"/>
+
+  <path d="M 290 205 L 298 193 L 308 217 L 318 193 L 328 217 L 338 193 L 348 217 L 358 205" class="res"/>
+  <text x="324" y="183" text-anchor="middle" class="pin">1 kΩ</text>
+  <text x="324" y="240" text-anchor="middle" class="sub">R1 (top, Arduino side)</text>
+
+  <line x1="358" y1="205" x2="480" y2="205" class="sig"/>
+  <circle cx="480" cy="205" r="5" class="node"/>
+  <text x="480" y="188" text-anchor="middle" class="pin">≈ 3.3 V</text>
+
+  <line x1="485" y1="205" x2="700" y2="205" class="sig"/>
+
+  <rect x="700" y="150" width="140" height="110" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.4"/>
+  <text x="770" y="182" text-anchor="middle" class="h" fill="#27500A">HC-05</text>
+  <text x="770" y="202" text-anchor="middle" class="sub" fill="#27500A">RXD (3.3 V logic)</text>
+
+  <line x1="480" y1="210" x2="480" y2="280" class="sig"/>
+  <path d="M 480 280 L 468 288 L 492 298 L 468 308 L 492 318 L 468 328 L 492 338 L 480 346" class="res"/>
+  <text x="510" y="315" class="pin">2 kΩ</text>
+  <text x="510" y="335" class="sub">R2 (bottom, to GND)</text>
+
+  <line x1="480" y1="346" x2="480" y2="380" class="gnd"/>
+  <line x1="455" y1="380" x2="505" y2="380" class="gnd"/>
+  <line x1="462" y1="390" x2="498" y2="390" class="gnd" stroke-width="2"/>
+  <line x1="470" y1="400" x2="490" y2="400" class="gnd" stroke-width="1.5"/>
+  <text x="515" y="395" class="pin">GND (shared)</text>
+
+  <rect x="60" y="340" width="340" height="100" rx="8" fill="#fff8e1" stroke="#b26500" stroke-width="1.2"/>
+  <text x="80" y="368" class="warn">Why this matters</text>
+  <text x="80" y="392" class="lbl">HC-05's RX input is rated for 3.3 V logic.</text>
+  <text x="80" y="412" class="lbl">5 V straight in damages the module over time.</text>
+  <text x="80" y="432" class="lbl">R1 = 1 kΩ (top), R2 = 2 kΩ (bottom) → ≈ 3.3 V.</text>
+
+  <rect x="540" y="340" width="320" height="100" rx="8" fill="#fafafa" stroke="#888" stroke-width="1.2"/>
+  <text x="558" y="368" class="h">Build on the breadboard:</text>
+  <text x="558" y="392" class="lbl">1. Arduino TX → one leg of R1 (1 kΩ)</text>
+  <text x="558" y="412" class="lbl">2. Other leg of R1 → HC-05 RXD → one leg of R2 (2 kΩ)</text>
+  <text x="558" y="432" class="lbl">3. Other leg of R2 → GND rail</text>
+</svg>

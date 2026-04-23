@@ -1,0 +1,8 @@
+{
+  "name": "ArmProtocol",
+  "version": "0.1.0",
+  "description": "Shared 7-byte framed packet format for the EE6003 robotic arm (controller <-> arm over HC-05).",
+  "keywords": "serial, bluetooth, hc-05, robotics",
+  "frameworks": "arduino",
+  "platforms": "*"
+}
