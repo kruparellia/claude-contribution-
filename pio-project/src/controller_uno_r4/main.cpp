@@ -78,8 +78,8 @@ struct Stick {
     bool     longHandled;
 };
 
-Stick j1 { PIN_J1_VRX, PIN_J1_VRY, PIN_J1_SW, HIGH, HIGH, 0, 0, false };
-Stick j2 { PIN_J2_VRX, PIN_J2_VRY, PIN_J2_SW, HIGH, HIGH, 0, 0, false };
+Stick stick1 { PIN_J1_VRX, PIN_J1_VRY, PIN_J1_SW, HIGH, HIGH, 0, 0, false };
+Stick stick2 { PIN_J2_VRX, PIN_J2_VRY, PIN_J2_SW, HIGH, HIGH, 0, 0, false };
 
 float angBase     = HOME.base;
 float angShoulder = HOME.shoulder;
@@ -157,8 +157,8 @@ void setup() {
 void loop() {
     uint32_t now = millis();
 
-    bool home1 = pollButton(j1, now);
-    bool home2 = pollButton(j2, now);
+    bool home1 = pollButton(stick1, now);
+    bool home2 = pollButton(stick2, now);
 
     // Laptop hotkey: 'h' / 'H' on USB Serial snaps home. Drain anything
     // else so we don't backlog the rx FIFO.
@@ -175,8 +175,8 @@ void loop() {
     lastTickMs = now;
 
     float j1x, j1y, j2x, j2y;
-    readStick(j1, j1x, j1y);
-    readStick(j2, j2x, j2y);
+    readStick(stick1, j1x, j1y);
+    readStick(stick2, j2x, j2y);
 
     // Joystick 1 -> base (X) + shoulder (Y, inverted so up = forward).
     angBase     = clampF(angBase     + j1x * MAX_RATE * dt, L_BASE.lo,     L_BASE.hi);
@@ -190,7 +190,7 @@ void loop() {
     f.shoulder = (uint8_t)(angShoulder + 0.5f);
     f.elbow    = (uint8_t)(angElbow    + 0.5f);
     f.claw     = (uint8_t)(angClaw     + 0.5f);
-    f.flags    = ((j1.swState == LOW) || (j2.swState == LOW)) ? ArmProto::FLAG_BUTTON : 0;
+    f.flags    = ((stick1.swState == LOW) || (stick2.swState == LOW)) ? ArmProto::FLAG_BUTTON : 0;
 
     uint8_t buf[ArmProto::FRAME_SIZE];
     ArmProto::encode(f, buf);
