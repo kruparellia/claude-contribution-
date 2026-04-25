@@ -13,39 +13,36 @@ The golden rule for servo projects:
 > **Servos get their own power rail. Arduinos get USB. The grounds meet in the middle.**
 
 ```
-    4xAA pack (~6 V, fresh alkalines)
+    Bench PSU — 6.0 V, current limit ≥ 3 A (5 A headroom is ideal)
         +  ───────────────┬─────────────────┐
                           │                 │
                           │                 │
-                     servo VCC         (100–470 µF
+                     servo VCC         (220–470 µF
                      (red wires)       electrolytic,
                           │            + to V+, - to GND)
                           │
         –  ───────────────┴──────────────┬──────────── Mega GND
                                          │
-                                         └────────── Uno R4 GND (once
-                                                     you move to the
-                                                     handheld controller)
+                                         └────────── Uno R4 GND (controller side)
 
     USB cable from laptop ────────── Mega +5V/GND (Arduino-only)
 ```
 
 Key points:
 
-- **Do NOT connect the 4xAA pack's + to the Mega's 5V or VIN.** The pack is only for the servos. The Mega takes its 5V from USB during bring-up.
-- **Common ground is mandatory.** Run a wire from the battery pack’s `–` rail to a GND pin on the Mega, otherwise the servo pulse signal has no reference and the servos will twitch randomly.
-- **Bulk capacitor on the servo rail.** Solder or breadboard at least a 220 µF electrolytic between servo V+ and GND, close to the servos. It absorbs current spikes when all 4 servos accelerate at once.
+- **Do NOT connect the bench PSU's + to the Mega's 5V or VIN.** The PSU is only for the servos. The Mega takes its 5V from USB.
+- **Common ground is mandatory.** Run a wire from the PSU's `–` rail to a GND pin on the Mega, otherwise the servo pulse signal has no reference and the servos will twitch randomly.
+- **Bulk capacitor on the servo rail.** Place at least a 220 µF electrolytic between servo V+ and GND, close to the servos. It absorbs current spikes when all 4 servos accelerate at once.
 
-### Can the 4xAA pack actually run the arm?
+### Bench PSU settings
 
-Short answer: yes for bring-up and demos, marginal for aggressive motion.
+A mains-powered bench supply (UK 230 V → 6 V DC) is what this build assumes. Recommended:
 
-- 4× fresh alkaline AAs ≈ 6.0 V off-load, ~5.5 V under 1 A load. MG996R spec window is 4.8–7.2 V.
-- Peak stall current for one MG996R ≈ 2.5 A. Four stalling at once = ~10 A, which no AA pack will deliver — the voltage will collapse and the Mega will reset.
-- Typical moving current per MG996R ≈ 0.5–0.9 A. Four moving smoothly ≈ 2–3 A, which alkalines can supply but will drain the pack in under an hour.
-- **For the final demo**, consider a 2S LiPo (7.4 V) + 5 V BEC rated at 5 A, or a bench PSU set to 6.0 V with 3 A limit. This is an easy “advanced feature” you can mention in the report.
+- **Voltage:** 6.0 V (well inside the MG996R 4.8–7.2 V window).
+- **Current limit:** ≥ 3 A for normal motion; 5 A leaves headroom for simultaneous accelerations. Peak stall for one MG996R is ~2.5 A, so four stalling at once would exceed any reasonable limit — the slew limit in firmware (`MAX_DEG_PER_SEC = 120`) keeps draw far below stall.
+- **Output OFF before wiring**, then turn ON once continuity / isolation are checked (see §6).
 
-If at any point during testing you hear the arm buzz, then see the Mega’s red LED dim, then reboot — that’s brown-out. Stop, the pack is sagging under load.
+If at any point during testing you hear the arm buzz, then see the Mega’s red LED dim, then reboot — that’s brown-out. Stop, check that the PSU current limit isn't kicking in and that the common ground is solid.
 
 ---
 
@@ -55,8 +52,8 @@ Your breadboard has two power rails along each long edge. Use them like this:
 
 ```
   Top red rail   ──── +5V from Mega (for HC-05 and joystick VCC)
-  Top blue rail  ──── GND  (tied to Mega GND AND battery pack GND)
-  Bottom red rail ─── +6V from 4xAA pack (servos only)
+  Top blue rail  ──── GND  (tied to Mega GND AND bench PSU GND)
+  Bottom red rail ─── +6V from bench PSU (servos only)
   Bottom blue rail ── GND  (same net as top blue rail — link them!)
 ```
 
@@ -79,7 +76,7 @@ Servo cables are three wires. Convention:
 | Base      | MG996R   | **D9**   | Base yaw                                |
 | Shoulder  | MG996R   | **D10**  | Lower arm pitch                         |
 | Elbow     | MG996R   | **D11**  | Upper arm pitch (via parallelogram)     |
-| Claw      | SG90     | **D6**   | Gripper open/close                      |
+| Claw      | MG996R   | **D6**   | Gripper open/close                      |
 
 If your mechanical build has the elbow servo driven through a linkage (the EEZYbotARM pattern), that's fine — the firmware still treats it as one degree of freedom.
 
@@ -125,9 +122,13 @@ Output at the junction: `V_out = 5 V × R2 / (R1 + R2) = 5 × 2/3 ≈ 3.3 V`. Th
 
 ---
 
-## 5. Joystick HW-504 wiring (controller side)
+## 5. Joystick wiring (controller side — TWO joysticks, KY-023 / HW-504)
 
-| HW-504 pin | Uno R4 pin    |
+Both joysticks share the Uno R4's 5 V / GND rails. Each gets its own pair of analog pins for X/Y and one digital pin for the click.
+
+### Joystick 1 (left stick → controls **base** + **shoulder**)
+
+| KY-023 pin | Uno R4 pin    |
 |------------|---------------|
 | GND        | GND           |
 | +5V        | 5V            |
@@ -135,16 +136,36 @@ Output at the junction: `V_out = 5 V × R2 / (R1 + R2) = 5 × 2/3 ≈ 3.3 V`. Th
 | VRy        | **A1**        |
 | SW         | **D2**        |
 
-`SW` is an open-drain push-button; the firmware uses `INPUT_PULLUP` so no external resistor is needed.
+### Joystick 2 (right stick → controls **elbow** + **claw**)
+
+| KY-023 pin | Uno R4 pin    |
+|------------|---------------|
+| GND        | GND           |
+| +5V        | 5V            |
+| VRx        | **A2**        |
+| VRy        | **A3**        |
+| SW         | **D3**        |
+
+`SW` on each stick is an open-drain push-button; the firmware uses `INPUT_PULLUP` so no external resistor is needed. **Long-press either SW (≥ 1 s) snaps the arm back to home pose.** Short presses are reserved.
+
+### Optional: diagonal-gate toggle
+
+In `controller_uno_r4/main.cpp` there is a compile-time switch:
+
+```cpp
+#define DIAGONAL_GATE 0   // 0 = allow X+Y at once, 1 = only the dominant axis
+```
+
+Flip it to `1` to enforce the "only X or Y, never diagonal" behaviour from the design notes — handy for comparing feel.
 
 ---
 
 ## 6. First-power checklist
 
-Before touching any battery, verify with a multimeter:
+Bench PSU OUTPUT OFF. Verify with a multimeter first:
 
-1. **Continuity** — battery pack `–` → Mega GND → breadboard top blue rail → bottom blue rail. All one net.
-2. **Isolation** — battery pack `+` must NOT be connected to Mega 5V, Mega VIN, or the top red rail.
+1. **Continuity** — PSU `–` → Mega GND → breadboard top blue rail → bottom blue rail. All one net.
+2. **Isolation** — PSU `+` must NOT be connected to Mega 5V, Mega VIN, or the top red rail.
 3. **Divider direction** — on both HC-05 RX lines, the **1 kΩ** resistor is on the Arduino side (R1, upper leg) and the **2 kΩ** resistor is on the GND side (R2, lower leg). Swap them and the module sees ~1.7 V instead of 3.3 V, and won't respond.
 4. **Signal pins, not power pins** — triple-check that each servo's orange/yellow wire lands on D6/9/10/11, not on 5V or GND.
 
@@ -152,11 +173,10 @@ Then, in order:
 
 1. Plug Mega into laptop via USB. Red LED on Mega steady. Upload `arm_mega` firmware.
 2. Open Serial Monitor at 115200. You should see `[arm] boot OK — waiting for frames on Serial1`.
-3. Unplug Mega USB. Plug 4xAA pack into the bottom rail. Plug Mega USB back in.
-4. All four servos should twitch to their initial pose (90°). If one is way off, the linkage is offset — note the offset, we'll calibrate in firmware.
-5. Flash `controller_uno_r4` to the Uno R4 Minima (remember: disconnect HC-05 TXD from D0 before upload).
-6. Reconnect HC-05 TXD. Power both Arduinos. Within a few seconds the master HC-05's LED should go from fast-blink to slow double-blink = paired.
-7. Wiggle the joystick. Arm should move smoothly. Press SW to swap to elbow/claw mode.
+3. Set PSU to **6.0 V, current limit 3 A**. Output ON. All four servos should twitch to their initial pose. If one is way off, the linkage is offset — note the offset, we'll calibrate in firmware.
+4. Flash `controller_uno_r4` to the Uno R4 Minima (remember: disconnect HC-05 TXD from D0 before upload).
+5. Reconnect HC-05 TXD. Power both Arduinos. Within a few seconds the master HC-05's LED should go from fast-blink to slow double-blink = paired.
+6. Wiggle Joystick 1 — base + shoulder should move. Wiggle Joystick 2 — elbow + claw should move. Long-press either SW for ≥ 1 s to home.
 
 ---
 
@@ -169,5 +189,6 @@ Then, in order:
 | HC-05 LEDs never pair (both fast-blink)         | Master not bound to slave's MAC             | Re-run `hc05_configure`, redo `AT+BIND=<slave addr>`. |
 | Paired but arm doesn't move                     | Baud mismatch or RX/TX swapped              | Confirm both modules set to 9600 via `AT+UART?`. Swap RX/TX if needed. |
 | Can't upload to Uno R4                          | HC-05 TXD still wired to D0                  | Disconnect D0 wire, upload, reconnect.                |
-| Joystick axis reversed from what you expected   | Physical orientation of the module          | Either rotate the joystick 90°, or negate `jx`/`jy` in `controller_uno_r4/main.cpp`. |
-| Arm drifts slowly even with joystick centred    | Deadzone too small for your joystick         | Increase `JOY_DEADZONE` from 60 to ~100 in `controller_uno_r4/main.cpp`. |
+| Joystick axis reversed from what you expected   | Physical orientation of the module          | Either rotate the joystick 90°, or negate the relevant `jNx`/`jNy` term in `controller_uno_r4/main.cpp`. |
+| Arm drifts slowly even with joystick centred    | Deadzone too small for that stick            | Increase `JOY_DEADZONE` from 60 to ~100 in `controller_uno_r4/main.cpp`. |
+| One stick works, the other doesn't              | A2/A3 or D3 mis-wired; bad joystick GND      | Probe A2/A3 — should read ~512 idle, swing 0–1023. Check stick 2 GND continuity. |

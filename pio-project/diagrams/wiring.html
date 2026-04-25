@@ -80,19 +80,19 @@
 <p class="meta">File: <code>01_power_architecture.svg</code></p>
 
 <div class="card">
-  <img src="01_power_architecture.svg" alt="Power architecture: USB powers the Mega, 4xAA pack powers the servos, grounds shared">
+  <img src="01_power_architecture.svg" alt="Power architecture: USB powers the Mega, 6 V bench PSU powers the servos, grounds shared">
 </div>
 
 <p>This is the single most important diagram. Two separate power sources feed the arm:</p>
 <ol>
   <li>The <strong>laptop's USB</strong> supplies the Mega (5 V at up to ~500 mA, plenty for the microcontroller).</li>
-  <li>The <strong>4×AA pack</strong> supplies the four servos (≈ 6 V at several amps peak).</li>
+  <li>The <strong>6 V bench PSU</strong> (UK 230 V mains in, constant-voltage out, current limit ≥ 3 A) supplies the four servos.</li>
 </ol>
 <p>The two supplies share one node: <strong>ground</strong>. Without that common return path, the servo signal from the Mega and the servo's own reference voltage disagree, and the servos twitch or refuse to respond.</p>
 
 <div class="callout">
   <strong>Never do this</strong>
-  The battery pack's <code>+</code> must not touch the Mega's <code>5V</code> pin, <code>VIN</code>, or any red rail that carries USB 5 V. You'd be shorting two supplies with different voltages — best case, the USB host cuts power; worst case, something smokes.
+  The PSU's <code>+</code> must not touch the Mega's <code>5V</code> pin, <code>VIN</code>, or any red rail that carries USB 5 V. You'd be shorting two supplies with different voltages — best case, the USB host cuts power; worst case, something smokes.
 </div>
 
 <h2 id="divider">2. HC-05 voltage divider</h2>
@@ -115,13 +115,13 @@
 <p class="meta">File: <code>03_arm_wiring.svg</code></p>
 
 <div class="card">
-  <img src="03_arm_wiring.svg" alt="Full arm-side wiring showing Mega 2560, 4 servos, HC-05 with divider, and 4xAA battery pack with common ground">
+  <img src="03_arm_wiring.svg" alt="Full arm-side wiring showing Mega 2560, 4 MG996R servos, HC-05 with divider, and 6 V bench PSU with common ground">
 </div>
 
 <p>Everything that lives on the arm base. Follow the coloured wires:</p>
 <ol>
-  <li><strong>Red</strong> — 6 V from battery+ up to each servo V+ (shared rail).</li>
-  <li><strong>Dark</strong> — GND. Battery−, all four servo GNDs, and Mega GND all meet at one junction (the common-ground node highlighted on the diagram).</li>
+  <li><strong>Red</strong> — 6 V from PSU+ up to each servo V+ (shared rail).</li>
+  <li><strong>Dark</strong> — GND. PSU−, all four servo GNDs, and Mega GND all meet at one junction (the common-ground node highlighted on the diagram).</li>
   <li><strong>Amber</strong> — servo PWM signal wires. D9 → base, D10 → shoulder, D11 → elbow, D6 → claw.</li>
   <li><strong>Blue</strong> — TX1 (D18) from Mega into the divider, then on to HC-05 RXD.</li>
   <li><strong>Green</strong> — TXD from HC-05 straight into Mega RX1 (D19). No divider needed because 3.3 V is read as HIGH by the Mega's 5 V input.</li>
@@ -129,24 +129,29 @@
 
 <div class="callout">
   <strong>Bulk capacitor</strong>
-  A 220–470 µF electrolytic across the servo V+/GND rail, close to the servos, prevents brown-outs when all four accelerate at once. Long leg to +, short leg to −. This is a quick win to make the arm move smoothly under the 4×AA pack.
+  A 220–470 µF electrolytic across the servo V+/GND rail, close to the servos, prevents brown-outs when all four accelerate at once. Long leg to +, short leg to −. With the bench PSU it isn't strictly required, but it costs nothing and keeps the rail clean.
 </div>
 
 <h2 id="controller">4. Controller side — full wiring</h2>
 <p class="meta">File: <code>04_controller_wiring.svg</code></p>
 
 <div class="card">
-  <img src="04_controller_wiring.svg" alt="Full controller-side wiring showing Uno R4 Minima, HW-504 joystick, HC-05 master with divider">
+  <img src="04_controller_wiring.svg" alt="Full controller-side wiring showing Uno R4 Minima, two KY-023 joysticks, HC-05 master with divider">
 </div>
 
-<p>The handheld controller has three things attached to the Uno R4 Minima: the joystick, the HC-05 master, and a USB cable (to your laptop during development; later, a power bank or 9 V battery in the Vin jack).</p>
+<p>The handheld controller has four things attached to the Uno R4 Minima: two KY-023 joysticks, the HC-05 master, and a USB cable (to your laptop during development; later, a power bank in the USB-C jack).</p>
 
 <div class="callout">
   <strong>Upload gotcha — worth reading twice</strong>
   The HC-05 TXD wire on D0 blocks USB uploads. Every time you want to re-flash the Uno R4, pop that single jumper off D0, upload, and put it back. The D1 side can stay wired.
 </div>
 
-<p>Joystick mapping in firmware: <code>VRx → A0</code>, <code>VRy → A1</code>, <code>SW → D2</code> (with internal pull-up). If an axis feels backwards once you're moving the arm, flip the sign of <code>jx</code> or <code>jy</code> in <code>controller_uno_r4/main.cpp</code>.</p>
+<p>Joystick mapping in firmware:</p>
+<ul>
+  <li><strong>Joystick 1 (left)</strong> — <code>VRx → A0</code>, <code>VRy → A1</code>, <code>SW → D2</code> · drives <em>base + shoulder</em>.</li>
+  <li><strong>Joystick 2 (right)</strong> — <code>VRx → A2</code>, <code>VRy → A3</code>, <code>SW → D3</code> · drives <em>elbow + claw</em>.</li>
+</ul>
+<p>Both <code>SW</code> pins use internal pull-ups. <strong>Long-press either SW (≥ 1 s)</strong> snaps the arm back to home. If an axis feels backwards once you're moving the arm, flip the sign of the matching <code>jNx</code>/<code>jNy</code> term in <code>controller_uno_r4/main.cpp</code>. To compare diagonal-allowed vs strictly-orthogonal motion, set <code>#define DIAGONAL_GATE 1</code> in the same file.</p>
 
 </body>
 </html>

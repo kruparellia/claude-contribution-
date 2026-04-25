@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" width="100%" role="img">
   <title>Power architecture for the arm side</title>
-  <desc>USB powers the Mega. A separate 4xAA battery pack powers the servos. Grounds are shared. Battery + is never connected to the Mega.</desc>
+  <desc>USB powers the Mega. A separate 6 V bench PSU powers the servos. Grounds are shared. PSU + is never connected to the Mega.</desc>
 
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
@@ -53,7 +53,7 @@
   <rect x="720" y="230" width="220" height="50" rx="6" fill="#fff3e0" stroke="#b26500" stroke-width="1.2"/>
   <text x="730" y="258" class="h" fill="#b26500">Elbow servo</text>
   <rect x="720" y="300" width="220" height="50" rx="6" fill="#fff3e0" stroke="#b26500" stroke-width="1.2"/>
-  <text x="730" y="328" class="h" fill="#b26500">Claw servo (SG90)</text>
+  <text x="730" y="328" class="h" fill="#b26500">Claw servo (MG996R)</text>
 
   <circle cx="720" cy="105" r="4" fill="#d32f2f"/>
   <circle cx="720" cy="120" r="4" class="dot"/>
@@ -65,18 +65,13 @@
   <circle cx="720" cy="330" r="4" class="dot"/>
 
   <rect x="340" y="430" width="280" height="140" rx="10" fill="#fafafa" stroke="#555" stroke-width="1.4"/>
-  <text x="480" y="455" text-anchor="middle" class="h">4 × AA battery pack</text>
-  <text x="480" y="472" text-anchor="middle" class="sub">≈ 6 V (alkaline) or 4.8 V (NiMH)</text>
-  <g>
-    <rect x="360" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-    <rect x="416" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-    <rect x="472" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-    <rect x="528" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-    <text x="384" y="525" text-anchor="middle" class="pin">+  −</text>
-    <text x="440" y="525" text-anchor="middle" class="pin">−  +</text>
-    <text x="496" y="525" text-anchor="middle" class="pin">+  −</text>
-    <text x="552" y="525" text-anchor="middle" class="pin">−  +</text>
-  </g>
+  <text x="480" y="455" text-anchor="middle" class="h">Bench PSU — 6.0 V</text>
+  <text x="480" y="472" text-anchor="middle" class="sub">UK 230 V mains in · constant-voltage out · I-limit ≥ 3 A</text>
+  <rect x="360" y="488" width="240" height="62" rx="6" fill="#fff" stroke="#888" stroke-width="1"/>
+  <rect x="375" y="500" width="84" height="36" rx="3" fill="#1a1a1a"/>
+  <text x="417" y="523" text-anchor="middle" class="pin" fill="#fff">6.00 V</text>
+  <rect x="475" y="500" width="84" height="36" rx="3" fill="#1a1a1a"/>
+  <text x="517" y="523" text-anchor="middle" class="pin" fill="#fff">3.00 A</text>
   <circle cx="595" cy="445" r="5" fill="#d32f2f"/>
   <text x="608" y="449" class="pin" fill="#d32f2f">+</text>
   <circle cx="365" cy="445" r="5" class="dot"/>
@@ -101,17 +96,17 @@
   <text x="232" y="418" class="sub">common ground</text>
 
   <rect x="320" y="260" width="240" height="50" rx="6" fill="#ffebee" stroke="#c62828" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="440" y="282" text-anchor="middle" class="warn">✕  Do NOT jumper battery + to Mega 5V</text>
+  <text x="440" y="282" text-anchor="middle" class="warn">✕  Do NOT jumper PSU + to Mega 5V</text>
   <text x="440" y="300" text-anchor="middle" class="note">Different supplies, different voltages — shorts them together.</text>
 
   <rect x="60" y="480" width="240" height="120" rx="8" fill="#fafafa" stroke="#b4b2a9" stroke-width="1"/>
   <text x="75" y="502" class="h">Wire colour key</text>
   <line x1="78" y1="524" x2="118" y2="524" class="wpos"/>
-  <text x="128" y="528" class="lbl">+ supply (battery +)</text>
+  <text x="128" y="528" class="lbl">+ supply (PSU +)</text>
   <line x1="78" y1="548" x2="118" y2="548" class="wgnd"/>
   <text x="128" y="552" class="lbl">Ground (− / GND)</text>
   <line x1="78" y1="572" x2="118" y2="572" class="wusb"/>
   <text x="128" y="576" class="lbl">USB (5 V + data)</text>
 
-  <text x="500" y="612" text-anchor="middle" class="sub">One rule: servos eat from the battery, the Mega eats from USB, and the grounds shake hands.</text>
+  <text x="500" y="612" text-anchor="middle" class="sub">One rule: servos eat from the bench PSU, the Mega eats from USB, and the grounds shake hands.</text>
 </svg>

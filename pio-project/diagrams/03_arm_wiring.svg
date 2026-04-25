@@ -23,7 +23,7 @@
   </style>
 
   <text x="600" y="34" text-anchor="middle" class="ttl">Arm side — full wiring</text>
-  <text x="600" y="56" text-anchor="middle" class="sub">Mega 2560 · 3× MG996R + 1× SG90 · HC-05 slave · 4×AA battery for servos</text>
+  <text x="600" y="56" text-anchor="middle" class="sub">Mega 2560 · 4× MG996R · HC-05 slave · 6 V bench PSU for servos</text>
 
   <rect x="40" y="90" width="220" height="140" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.5"/>
   <text x="150" y="118" text-anchor="middle" class="h" fill="#27500A">HC-05 (slave)</text>
@@ -86,7 +86,7 @@
   <text x="1010" y="390" text-anchor="middle" class="h" fill="#412402">Elbow (MG996R)</text>
   <text x="1010" y="410" text-anchor="middle" class="sub" fill="#412402">pitch — joint 3</text>
   <rect x="860" y="500" width="300" height="110" rx="8" fill="#FAC775" stroke="#854F0B" stroke-width="1.4"/>
-  <text x="1010" y="530" text-anchor="middle" class="h" fill="#412402">Claw (SG90)</text>
+  <text x="1010" y="530" text-anchor="middle" class="h" fill="#412402">Claw (MG996R)</text>
   <text x="1010" y="550" text-anchor="middle" class="sub" fill="#412402">gripper</text>
 
   <circle cx="860" cy="115" r="5" fill="#F9A825"/><text x="850" y="119" text-anchor="end" class="pin">SIG</text>
@@ -127,15 +127,15 @@
   <text x="835" y="678" text-anchor="middle" class="note">220–470 µF across V+/GND</text>
 
   <rect x="120" y="710" width="520" height="180" rx="10" fill="#fafafa" stroke="#555" stroke-width="1.5"/>
-  <text x="380" y="738" text-anchor="middle" class="h">4 × AA battery pack  (≈ 6 V)</text>
-  <rect x="150" y="760" width="55" height="80" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-  <rect x="215" y="760" width="55" height="80" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-  <rect x="280" y="760" width="55" height="80" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-  <rect x="345" y="760" width="55" height="80" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
-  <text x="178" y="805" text-anchor="middle" class="pin">AA</text>
-  <text x="243" y="805" text-anchor="middle" class="pin">AA</text>
-  <text x="308" y="805" text-anchor="middle" class="pin">AA</text>
-  <text x="373" y="805" text-anchor="middle" class="pin">AA</text>
+  <text x="380" y="738" text-anchor="middle" class="h">Bench PSU — 6.0 V, current limit ≥ 3 A</text>
+  <rect x="150" y="755" width="460" height="90" rx="6" fill="#fff" stroke="#888" stroke-width="1"/>
+  <rect x="170" y="780" width="80" height="40" rx="4" fill="#1a1a1a"/>
+  <text x="210" y="804" text-anchor="middle" class="pin" fill="#fff">6.00 V</text>
+  <rect x="270" y="780" width="80" height="40" rx="4" fill="#1a1a1a"/>
+  <text x="310" y="804" text-anchor="middle" class="pin" fill="#fff">3.00 A</text>
+  <text x="395" y="788" class="sub">UK 230 V mains in</text>
+  <text x="395" y="806" class="sub">isolated 6 V DC out</text>
+  <text x="395" y="824" class="sub">(constant-voltage mode)</text>
   <circle cx="620" cy="775" r="6" class="dotr"/><text x="620" y="765" text-anchor="middle" class="pin" fill="#d32f2f">+</text>
   <circle cx="140" cy="775" r="6" class="dot"/><text x="140" y="765" text-anchor="middle" class="pin">−</text>
 
@@ -151,7 +151,7 @@
   <path class="wgnd" d="M 370 350 L 370 450 L 510 450 L 510 610"/>
 
   <rect x="280" y="650" width="260" height="40" rx="6" fill="#fff8e1" stroke="#b26500" stroke-width="1.2"/>
-  <text x="410" y="675" text-anchor="middle" class="note">Ground meets here — Mega GND + battery − share a net</text>
+  <text x="410" y="675" text-anchor="middle" class="note">Ground meets here — Mega GND + PSU − share a net</text>
 
   <rect x="950" y="710" width="220" height="180" rx="8" class="legend-box"/>
   <text x="965" y="735" class="h">Wire colour key</text>

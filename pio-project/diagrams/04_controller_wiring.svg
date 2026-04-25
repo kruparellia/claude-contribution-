@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" width="100%" role="img">
-  <title>Controller-side wiring diagram</title>
-  <desc>Full wiring for the handheld controller: Uno R4 Minima reading the HW-504 joystick, with the HC-05 master on Serial1 via a voltage divider on RX.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 940" width="100%" role="img">
+  <title>Controller-side wiring diagram (two joysticks)</title>
+  <desc>Full wiring for the handheld controller: Uno R4 Minima reading two KY-023 joysticks, with the HC-05 master on Serial1 via a voltage divider on RX.</desc>
 
   <style>
     .ttl { font: 500 22px system-ui, sans-serif; fill: #1a1a1a; }
@@ -23,92 +23,128 @@
     .legend-box{ fill: #fafafa; stroke: #b4b2a9; stroke-width: 1; }
   </style>
 
-  <text x="600" y="34" text-anchor="middle" class="ttl">Controller side — full wiring</text>
-  <text x="600" y="56" text-anchor="middle" class="sub">Arduino Uno R4 Minima · HW-504 joystick · HC-05 master</text>
+  <text x="650" y="34" text-anchor="middle" class="ttl">Controller side — full wiring (two joysticks)</text>
+  <text x="650" y="56" text-anchor="middle" class="sub">Arduino Uno R4 Minima · 2× KY-023 joysticks · HC-05 master</text>
 
-  <rect x="360" y="240" width="380" height="280" rx="12" fill="#B5D4F4" stroke="#185FA5" stroke-width="1.5"/>
-  <text x="550" y="275" text-anchor="middle" class="hb" fill="#0C447C">Arduino Uno R4 Minima</text>
-  <text x="550" y="295" text-anchor="middle" class="sub" fill="#0C447C">handheld controller</text>
-  <rect x="340" y="300" width="30" height="42" fill="#888" stroke="#333" stroke-width="1"/>
-  <text x="355" y="353" text-anchor="middle" class="pin">USB-C</text>
+  <!-- ===================== UNO R4 ===================== -->
+  <rect x="430" y="340" width="440" height="300" rx="12" fill="#B5D4F4" stroke="#185FA5" stroke-width="1.5"/>
+  <text x="650" y="378" text-anchor="middle" class="hb" fill="#0C447C">Arduino Uno R4 Minima</text>
+  <text x="650" y="398" text-anchor="middle" class="sub" fill="#0C447C">handheld controller</text>
+  <rect x="410" y="420" width="30" height="42" fill="#888" stroke="#333" stroke-width="1"/>
+  <text x="425" y="473" text-anchor="middle" class="pin">USB-C</text>
 
-  <circle cx="400" cy="240" r="5" fill="#7B1FA2"/><text x="400" y="228" text-anchor="middle" class="pin">A0</text>
-  <circle cx="460" cy="240" r="5" fill="#7B1FA2"/><text x="460" y="228" text-anchor="middle" class="pin">A1</text>
-  <circle cx="520" cy="240" r="5" fill="#5D4037"/><text x="520" y="228" text-anchor="middle" class="pin">D2</text>
-  <circle cx="620" cy="240" r="5" class="dotr"/><text x="620" y="228" text-anchor="middle" class="pin">5V</text>
-  <circle cx="680" cy="240" r="5" class="dot"/><text x="680" y="228" text-anchor="middle" class="pin">GND</text>
+  <!-- Top-edge pins (joystick analog + button + power for joysticks) -->
+  <circle cx="470" cy="340" r="5" fill="#7B1FA2"/><text x="470" y="328" text-anchor="middle" class="pin">A0</text>
+  <circle cx="510" cy="340" r="5" fill="#7B1FA2"/><text x="510" y="328" text-anchor="middle" class="pin">A1</text>
+  <circle cx="560" cy="340" r="5" fill="#7B1FA2"/><text x="560" y="328" text-anchor="middle" class="pin">A2</text>
+  <circle cx="600" cy="340" r="5" fill="#7B1FA2"/><text x="600" y="328" text-anchor="middle" class="pin">A3</text>
+  <circle cx="660" cy="340" r="5" fill="#5D4037"/><text x="660" y="328" text-anchor="middle" class="pin">D2</text>
+  <circle cx="700" cy="340" r="5" fill="#5D4037"/><text x="700" y="328" text-anchor="middle" class="pin">D3</text>
+  <circle cx="770" cy="340" r="5" class="dotr"/><text x="770" y="328" text-anchor="middle" class="pin">5V</text>
+  <circle cx="830" cy="340" r="5" class="dot"/><text x="830" y="328" text-anchor="middle" class="pin">GND</text>
 
-  <circle cx="440" cy="520" r="5" fill="#2E7D32"/><text x="440" y="538" text-anchor="middle" class="pin">D0 (RX1)</text>
-  <circle cx="520" cy="520" r="5" fill="#1565C0"/><text x="520" y="538" text-anchor="middle" class="pin">D1 (TX1)</text>
-  <circle cx="620" cy="520" r="5" class="dotr"/><text x="620" y="538" text-anchor="middle" class="pin">5V</text>
-  <circle cx="680" cy="520" r="5" class="dot"/><text x="680" y="538" text-anchor="middle" class="pin">GND</text>
+  <!-- Bottom-edge pins (HC-05 serial + power) -->
+  <circle cx="500" cy="640" r="5" fill="#2E7D32"/><text x="500" y="658" text-anchor="middle" class="pin">D0 (RX1)</text>
+  <circle cx="580" cy="640" r="5" fill="#1565C0"/><text x="580" y="658" text-anchor="middle" class="pin">D1 (TX1)</text>
+  <circle cx="700" cy="640" r="5" class="dotr"/><text x="700" y="658" text-anchor="middle" class="pin">5V</text>
+  <circle cx="770" cy="640" r="5" class="dot"/><text x="770" y="658" text-anchor="middle" class="pin">GND</text>
 
-  <rect x="880" y="80" width="260" height="150" rx="10" fill="#EEDDFF" stroke="#534AB7" stroke-width="1.4"/>
-  <text x="1010" y="110" text-anchor="middle" class="h" fill="#26215C">HW-504 joystick</text>
-  <text x="1010" y="130" text-anchor="middle" class="sub" fill="#26215C">2-axis + push-switch</text>
-  <circle cx="1010" cy="175" r="30" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="1"/>
-  <circle cx="1010" cy="175" r="10" fill="#888" stroke="#333" stroke-width="1"/>
+  <!-- ===================== JOYSTICK 1 (left) ===================== -->
+  <rect x="50" y="80" width="290" height="200" rx="10" fill="#EEDDFF" stroke="#534AB7" stroke-width="1.4"/>
+  <text x="195" y="110" text-anchor="middle" class="h" fill="#26215C">Joystick 1 (left)</text>
+  <text x="195" y="130" text-anchor="middle" class="sub" fill="#26215C">KY-023 — base + shoulder</text>
+  <circle cx="195" cy="195" r="32" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="1"/>
+  <circle cx="195" cy="195" r="11" fill="#888" stroke="#333" stroke-width="1"/>
 
-  <circle cx="880" cy="110" r="5" class="dot"/><text x="870" y="114" text-anchor="end" class="pin">GND</text>
-  <circle cx="880" cy="135" r="5" class="dotr"/><text x="870" y="139" text-anchor="end" class="pin">+5V</text>
-  <circle cx="880" cy="160" r="5" fill="#7B1FA2"/><text x="870" y="164" text-anchor="end" class="pin">VRx</text>
-  <circle cx="880" cy="185" r="5" fill="#7B1FA2"/><text x="870" y="189" text-anchor="end" class="pin">VRy</text>
-  <circle cx="880" cy="210" r="5" fill="#5D4037"/><text x="870" y="214" text-anchor="end" class="pin">SW</text>
+  <circle cx="340" cy="115" r="5" class="dot"/><text x="350" y="119" class="pin">GND</text>
+  <circle cx="340" cy="140" r="5" class="dotr"/><text x="350" y="144" class="pin">+5V</text>
+  <circle cx="340" cy="165" r="5" fill="#7B1FA2"/><text x="350" y="169" class="pin">VRx</text>
+  <circle cx="340" cy="190" r="5" fill="#7B1FA2"/><text x="350" y="194" class="pin">VRy</text>
+  <circle cx="340" cy="215" r="5" fill="#5D4037"/><text x="350" y="219" class="pin">SW</text>
 
-  <path class="wgnd" d="M 880 110 L 840 110 L 840 200 L 680 200 L 680 240"/>
-  <path class="wpos" d="M 880 135 L 830 135 L 830 190 L 620 190 L 620 240"/>
-  <path class="wan"  d="M 880 160 L 820 160 L 820 180 L 400 180 L 400 240"/>
-  <path class="wan"  d="M 880 185 L 815 185 L 815 175 L 460 175 L 460 240"/>
-  <path class="wbtn" d="M 880 210 L 810 210 L 810 170 L 520 170 L 520 240"/>
+  <!-- J1 wires to Uno -->
+  <path class="wgnd" d="M 340 115 L 410 115 L 410 285 L 830 285 L 830 340"/>
+  <path class="wpos" d="M 340 140 L 405 140 L 405 280 L 770 280 L 770 340"/>
+  <path class="wan"  d="M 340 165 L 400 165 L 400 275 L 470 275 L 470 340"/>
+  <path class="wan"  d="M 340 190 L 395 190 L 395 270 L 510 270 L 510 340"/>
+  <path class="wbtn" d="M 340 215 L 390 215 L 390 265 L 660 265 L 660 340"/>
 
-  <rect x="860" y="600" width="280" height="150" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.5"/>
-  <text x="1000" y="630" text-anchor="middle" class="h" fill="#27500A">HC-05 (master)</text>
-  <text x="1000" y="650" text-anchor="middle" class="sub" fill="#27500A">AT+NAME=CTRL, BIND=&lt;arm MAC&gt;</text>
+  <!-- ===================== JOYSTICK 2 (right) ===================== -->
+  <rect x="960" y="80" width="290" height="200" rx="10" fill="#EEDDFF" stroke="#534AB7" stroke-width="1.4"/>
+  <text x="1105" y="110" text-anchor="middle" class="h" fill="#26215C">Joystick 2 (right)</text>
+  <text x="1105" y="130" text-anchor="middle" class="sub" fill="#26215C">KY-023 — elbow + claw</text>
+  <circle cx="1105" cy="195" r="32" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="1"/>
+  <circle cx="1105" cy="195" r="11" fill="#888" stroke="#333" stroke-width="1"/>
 
-  <circle cx="860" cy="680" r="5" class="dotr"/><text x="850" y="684" text-anchor="end" class="pin">VCC</text>
-  <circle cx="860" cy="705" r="5" class="dot"/><text x="850" y="709" text-anchor="end" class="pin">GND</text>
-  <circle cx="860" cy="730" r="5" fill="#1565C0"/><text x="850" y="734" text-anchor="end" class="pin">TXD</text>
-  <circle cx="1140" cy="680" r="5" fill="#2E7D32"/><text x="1150" y="684" class="pin">RXD</text>
+  <circle cx="960" cy="115" r="5" class="dot"/><text x="950" y="119" text-anchor="end" class="pin">GND</text>
+  <circle cx="960" cy="140" r="5" class="dotr"/><text x="950" y="144" text-anchor="end" class="pin">+5V</text>
+  <circle cx="960" cy="165" r="5" fill="#7B1FA2"/><text x="950" y="169" text-anchor="end" class="pin">VRx</text>
+  <circle cx="960" cy="190" r="5" fill="#7B1FA2"/><text x="950" y="194" text-anchor="end" class="pin">VRy</text>
+  <circle cx="960" cy="215" r="5" fill="#5D4037"/><text x="950" y="219" text-anchor="end" class="pin">SW</text>
 
-  <path class="wpos" d="M 860 680 L 780 680 L 780 610 L 620 610 L 620 520"/>
-  <path class="wgnd" d="M 860 705 L 770 705 L 770 615 L 680 615 L 680 520"/>
-  <path class="wtx"  d="M 860 730 L 760 730 L 760 620 L 440 620 L 440 520"/>
+  <!-- J2 wires to Uno -->
+  <path class="wgnd" d="M 960 115 L 890 115 L 890 290 L 830 290 L 830 340"/>
+  <path class="wpos" d="M 960 140 L 895 140 L 895 295 L 770 295 L 770 340"/>
+  <path class="wan"  d="M 960 165 L 900 165 L 900 300 L 600 300 L 600 340"/>
+  <path class="wan"  d="M 960 190 L 905 190 L 905 305 L 560 305 L 560 340"/>
+  <path class="wbtn" d="M 960 215 L 910 215 L 910 310 L 700 310 L 700 340"/>
 
-  <path d="M 760 405 L 774 395 L 790 415 L 806 395 L 822 415 L 838 395 L 854 415 L 870 405" class="resistor"/>
-  <text x="815" y="383" text-anchor="middle" class="pin">R1 = 1 kΩ  (top)</text>
-  <circle cx="760" cy="405" r="4" class="dot"/>
-  <circle cx="870" cy="405" r="4" class="dot"/>
+  <!-- ===================== HC-05 (bottom-right) ===================== -->
+  <rect x="940" y="720" width="300" height="160" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.5"/>
+  <text x="1090" y="752" text-anchor="middle" class="h" fill="#27500A">HC-05 (master)</text>
+  <text x="1090" y="772" text-anchor="middle" class="sub" fill="#27500A">AT+NAME=CTRL, BIND=&lt;arm MAC&gt;</text>
 
-  <path d="M 760 440 L 750 452 L 770 468 L 750 484 L 770 500 L 750 516 L 770 532 L 760 545" class="resistor"/>
-  <text x="782" y="495" class="pin">R2 = 2 kΩ  (to GND)</text>
-  <circle cx="760" cy="440" r="4" class="dot"/>
-  <circle cx="760" cy="545" r="4" class="dot"/>
+  <circle cx="940" cy="800" r="5" class="dotr"/><text x="930" y="804" text-anchor="end" class="pin">VCC</text>
+  <circle cx="940" cy="825" r="5" class="dot"/><text x="930" y="829" text-anchor="end" class="pin">GND</text>
+  <circle cx="940" cy="850" r="5" fill="#1565C0"/><text x="930" y="854" text-anchor="end" class="pin">TXD</text>
+  <circle cx="1240" cy="800" r="5" fill="#2E7D32"/><text x="1250" y="804" class="pin">RXD</text>
 
-  <path class="wtx" d="M 520 520 L 520 405 L 760 405"/>
-  <path class="wrx" d="M 870 405 L 1140 405 L 1140 680"/>
-  <circle cx="760" cy="405" r="4" class="dot"/>
+  <!-- HC-05 power + TX wires up to Uno bottom -->
+  <path class="wpos" d="M 940 800 L 870 800 L 870 700 L 700 700 L 700 640"/>
+  <path class="wgnd" d="M 940 825 L 860 825 L 860 705 L 770 705 L 770 640"/>
+  <path class="wtx"  d="M 940 850 L 850 850 L 850 710 L 500 710 L 500 640"/>
 
-  <path class="wgnd" d="M 760 545 L 760 600 L 680 600 L 680 520"/>
+  <!-- Voltage divider between D1 (TX) and HC-05 RXD -->
+  <path d="M 820 510 L 834 500 L 850 520 L 866 500 L 882 520 L 898 500 L 914 520 L 930 510" class="resistor"/>
+  <text x="875" y="488" text-anchor="middle" class="pin">R1 = 1 kΩ  (top)</text>
+  <circle cx="820" cy="510" r="4" class="dot"/>
+  <circle cx="930" cy="510" r="4" class="dot"/>
 
-  <rect x="40" y="360" width="300" height="250" rx="10" fill="#fff8e1" stroke="#b26500" stroke-width="1.4"/>
-  <text x="60" y="388" class="warn">⚠ Upload gotcha</text>
-  <text x="60" y="416" class="lbl">The Uno R4's D0/D1 are shared with the USB</text>
-  <text x="60" y="434" class="lbl">bootloader. If HC-05 TXD stays wired to D0,</text>
-  <text x="60" y="452" class="lbl">PlatformIO/IDE uploads will fail.</text>
+  <path d="M 820 545 L 810 557 L 830 573 L 810 589 L 830 605 L 810 621 L 830 637 L 820 650" class="resistor"/>
+  <text x="842" y="600" class="pin">R2 = 2 kΩ  (to GND)</text>
+  <circle cx="820" cy="545" r="4" class="dot"/>
+  <circle cx="820" cy="650" r="4" class="dot"/>
 
-  <text x="60" y="486" class="h">Fix:</text>
-  <text x="60" y="506" class="lbl">1. Pop the TXD jumper off D0</text>
-  <text x="60" y="524" class="lbl">2. Upload firmware</text>
-  <text x="60" y="542" class="lbl">3. Re-seat the TXD jumper on D0</text>
+  <!-- D1 (TX) into divider top, junction continues to HC-05 RXD -->
+  <path class="wtx" d="M 580 640 L 580 510 L 820 510"/>
+  <path class="wrx" d="M 930 510 L 1240 510 L 1240 800"/>
 
-  <text x="60" y="576" class="note">(The TX line on D1 is safe to leave connected)</text>
+  <!-- Divider GND leg meets bus to Uno bottom GND -->
+  <path class="wgnd" d="M 820 650 L 820 685 L 770 685 L 770 640"/>
 
-  <rect x="40" y="630" width="300" height="170" rx="10" class="legend-box"/>
-  <text x="55" y="655" class="h">Wire colour key</text>
-  <line x1="60" y1="678" x2="100" y2="678" class="wpos"/><text x="110" y="682" class="lbl">+ 5 V</text>
-  <line x1="60" y1="700" x2="100" y2="700" class="wgnd"/><text x="110" y="704" class="lbl">GND</text>
-  <line x1="60" y1="722" x2="100" y2="722" class="wan"/><text x="110" y="726" class="lbl">Analog (joystick VRx/VRy)</text>
-  <line x1="60" y1="744" x2="100" y2="744" class="wbtn"/><text x="110" y="748" class="lbl">Digital button (SW)</text>
-  <line x1="60" y1="766" x2="100" y2="766" class="wtx"/><text x="110" y="770" class="lbl">TX (Uno → HC-05)</text>
-  <line x1="60" y1="788" x2="100" y2="788" class="wrx"/><text x="110" y="792" class="lbl">RX (HC-05 → Uno)</text>
+  <!-- ===================== Upload gotcha ===================== -->
+  <rect x="40" y="380" width="320" height="240" rx="10" fill="#fff8e1" stroke="#b26500" stroke-width="1.4"/>
+  <text x="60" y="408" class="warn">⚠ Upload gotcha</text>
+  <text x="60" y="436" class="lbl">The Uno R4's D0/D1 are shared with the USB</text>
+  <text x="60" y="454" class="lbl">bootloader. If HC-05 TXD stays wired to D0,</text>
+  <text x="60" y="472" class="lbl">PlatformIO/IDE uploads will fail.</text>
+
+  <text x="60" y="506" class="h">Fix:</text>
+  <text x="60" y="526" class="lbl">1. Pop the TXD jumper off D0</text>
+  <text x="60" y="544" class="lbl">2. Upload firmware</text>
+  <text x="60" y="562" class="lbl">3. Re-seat the TXD jumper on D0</text>
+
+  <text x="60" y="596" class="note">(The TX line on D1 is safe to leave connected)</text>
+
+  <!-- ===================== Legend ===================== -->
+  <rect x="40" y="660" width="320" height="220" rx="10" class="legend-box"/>
+  <text x="55" y="685" class="h">Wire colour key</text>
+  <line x1="60" y1="708" x2="100" y2="708" class="wpos"/><text x="110" y="712" class="lbl">+ 5 V</text>
+  <line x1="60" y1="730" x2="100" y2="730" class="wgnd"/><text x="110" y="734" class="lbl">GND</text>
+  <line x1="60" y1="752" x2="100" y2="752" class="wan"/><text x="110" y="756" class="lbl">Analog (joystick VRx/VRy)</text>
+  <line x1="60" y1="774" x2="100" y2="774" class="wbtn"/><text x="110" y="778" class="lbl">Digital button (SW)</text>
+  <line x1="60" y1="796" x2="100" y2="796" class="wtx"/><text x="110" y="800" class="lbl">TX (Uno → HC-05)</text>
+  <line x1="60" y1="818" x2="100" y2="818" class="wrx"/><text x="110" y="822" class="lbl">RX (HC-05 → Uno)</text>
+  <text x="60" y="852" class="sub">J1 axes → A0/A1 · SW → D2</text>
+  <text x="60" y="870" class="sub">J2 axes → A2/A3 · SW → D3</text>
 </svg>

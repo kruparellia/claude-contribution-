@@ -28,7 +28,7 @@
 
 // ---- Pin assignments ------------------------------------------------
 static constexpr uint8_t SERVO_PIN_BASE     = 9;
-static constexpr uint8_t SERVO_PIN_SHOULDER = 5;
+static constexpr uint8_t SERVO_PIN_SHOULDER = 10;
 static constexpr uint8_t SERVO_PIN_ELBOW    = 11;
 static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 
