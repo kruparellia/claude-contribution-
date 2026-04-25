@@ -12,6 +12,8 @@
 //
 //   Long-press EITHER SW (>= 1 s)  ->  snap all axes back to home pose.
 //   Short-press SW                 ->  reserved (no-op for now).
+//   Type 'h' or 'H' on USB Serial  ->  snap to home (laptop hotkey path,
+//                                      see scripts/home.py).
 //
 // Wiring (Uno R4 Minima):
 //   Joystick 1   VRx -> A0    VRy -> A1    SW -> D2  (INPUT_PULLUP)
@@ -157,7 +159,16 @@ void loop() {
 
     bool home1 = pollButton(j1, now);
     bool home2 = pollButton(j2, now);
-    if (home1 || home2) snapHome();
+
+    // Laptop hotkey: 'h' / 'H' on USB Serial snaps home. Drain anything
+    // else so we don't backlog the rx FIFO.
+    bool homeKey = false;
+    while (Serial.available()) {
+        int c = Serial.read();
+        if (c == 'h' || c == 'H') homeKey = true;
+    }
+
+    if (home1 || home2 || homeKey) snapHome();
 
     if (now - lastTickMs < TICK_MS) return;
     float dt = (now - lastTickMs) / 1000.0f;

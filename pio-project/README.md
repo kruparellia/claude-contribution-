@@ -10,6 +10,7 @@ pio-project/
 ├── WIRING.md                 # read this FIRST — power, HC-05 divider, pin map
 ├── lib/
 │   └── ArmProtocol/          # shared 7-byte framed packet + decoder
+├── scripts/                  # python helpers (flash both envs, home hotkey)
 └── src/
     ├── arm_mega/             # firmware for the Mega (on the arm)
     ├── controller_uno_r4/    # firmware for the Uno R4 (handheld)
@@ -34,6 +35,20 @@ pio run -e controller_uno_r4 -t upload
 
 # Watch debug output
 pio device monitor -e arm_mega -b 115200
+```
+
+### One-shot orchestrators
+
+Two Python helpers in `scripts/` (see [`scripts/README.md`](scripts/README.md)):
+
+```bash
+# Build + upload both environments back-to-back, with a prompt in the
+# middle to disconnect/reconnect the HC-05 TXD jumper on the Uno R4.
+python scripts/flash_all.py
+
+# Laptop hotkey for the home pose. Press 'h' to snap home, 'q' to quit.
+# Requires `pip install pyserial` once.
+python scripts/home.py
 ```
 
 ## Bring-up order
