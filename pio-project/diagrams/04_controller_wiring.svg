@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" width="100%" role="img">
+  <title>Controller-side wiring diagram</title>
+  <desc>Full wiring for the handheld controller: Uno R4 Minima reading the HW-504 joystick, with the HC-05 master on Serial1 via a voltage divider on RX.</desc>
+
+  <style>
+    .ttl { font: 500 22px system-ui, sans-serif; fill: #1a1a1a; }
+    .h   { font: 500 15px system-ui, sans-serif; fill: #1a1a1a; }
+    .hb  { font: 500 16px system-ui, sans-serif; fill: #ffffff; }
+    .lbl { font: 400 13px system-ui, sans-serif; fill: #1a1a1a; }
+    .sub { font: 400 12px system-ui, sans-serif; fill: #555; }
+    .pin { font: 400 12px monospace; fill: #1a1a1a; }
+    .warn{ font: 500 14px system-ui, sans-serif; fill: #c62828; }
+    .note{ font: 400 12px system-ui, sans-serif; fill: #6a4e00; }
+    .wpos{ stroke: #d32f2f; stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .wgnd{ stroke: #263238; stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .wtx { stroke: #1565C0; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .wrx { stroke: #2E7D32; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .wan { stroke: #7B1FA2; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .wbtn{ stroke: #5D4037; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .dot { fill: #263238; }
+    .dotr{ fill: #d32f2f; }
+    .resistor { stroke: #1a1a1a; stroke-width: 1.8; fill: none; }
+    .legend-box{ fill: #fafafa; stroke: #b4b2a9; stroke-width: 1; }
+  </style>
+
+  <text x="600" y="34" text-anchor="middle" class="ttl">Controller side — full wiring</text>
+  <text x="600" y="56" text-anchor="middle" class="sub">Arduino Uno R4 Minima · HW-504 joystick · HC-05 master</text>
+
+  <rect x="360" y="240" width="380" height="280" rx="12" fill="#B5D4F4" stroke="#185FA5" stroke-width="1.5"/>
+  <text x="550" y="275" text-anchor="middle" class="hb" fill="#0C447C">Arduino Uno R4 Minima</text>
+  <text x="550" y="295" text-anchor="middle" class="sub" fill="#0C447C">handheld controller</text>
+  <rect x="340" y="300" width="30" height="42" fill="#888" stroke="#333" stroke-width="1"/>
+  <text x="355" y="353" text-anchor="middle" class="pin">USB-C</text>
+
+  <circle cx="400" cy="240" r="5" fill="#7B1FA2"/><text x="400" y="228" text-anchor="middle" class="pin">A0</text>
+  <circle cx="460" cy="240" r="5" fill="#7B1FA2"/><text x="460" y="228" text-anchor="middle" class="pin">A1</text>
+  <circle cx="520" cy="240" r="5" fill="#5D4037"/><text x="520" y="228" text-anchor="middle" class="pin">D2</text>
+  <circle cx="620" cy="240" r="5" class="dotr"/><text x="620" y="228" text-anchor="middle" class="pin">5V</text>
+  <circle cx="680" cy="240" r="5" class="dot"/><text x="680" y="228" text-anchor="middle" class="pin">GND</text>
+
+  <circle cx="440" cy="520" r="5" fill="#2E7D32"/><text x="440" y="538" text-anchor="middle" class="pin">D0 (RX1)</text>
+  <circle cx="520" cy="520" r="5" fill="#1565C0"/><text x="520" y="538" text-anchor="middle" class="pin">D1 (TX1)</text>
+  <circle cx="620" cy="520" r="5" class="dotr"/><text x="620" y="538" text-anchor="middle" class="pin">5V</text>
+  <circle cx="680" cy="520" r="5" class="dot"/><text x="680" y="538" text-anchor="middle" class="pin">GND</text>
+
+  <rect x="880" y="80" width="260" height="150" rx="10" fill="#EEDDFF" stroke="#534AB7" stroke-width="1.4"/>
+  <text x="1010" y="110" text-anchor="middle" class="h" fill="#26215C">HW-504 joystick</text>
+  <text x="1010" y="130" text-anchor="middle" class="sub" fill="#26215C">2-axis + push-switch</text>
+  <circle cx="1010" cy="175" r="30" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="1"/>
+  <circle cx="1010" cy="175" r="10" fill="#888" stroke="#333" stroke-width="1"/>
+
+  <circle cx="880" cy="110" r="5" class="dot"/><text x="870" y="114" text-anchor="end" class="pin">GND</text>
+  <circle cx="880" cy="135" r="5" class="dotr"/><text x="870" y="139" text-anchor="end" class="pin">+5V</text>
+  <circle cx="880" cy="160" r="5" fill="#7B1FA2"/><text x="870" y="164" text-anchor="end" class="pin">VRx</text>
+  <circle cx="880" cy="185" r="5" fill="#7B1FA2"/><text x="870" y="189" text-anchor="end" class="pin">VRy</text>
+  <circle cx="880" cy="210" r="5" fill="#5D4037"/><text x="870" y="214" text-anchor="end" class="pin">SW</text>
+
+  <path class="wgnd" d="M 880 110 L 840 110 L 840 200 L 680 200 L 680 240"/>
+  <path class="wpos" d="M 880 135 L 830 135 L 830 190 L 620 190 L 620 240"/>
+  <path class="wan"  d="M 880 160 L 820 160 L 820 180 L 400 180 L 400 240"/>
+  <path class="wan"  d="M 880 185 L 815 185 L 815 175 L 460 175 L 460 240"/>
+  <path class="wbtn" d="M 880 210 L 810 210 L 810 170 L 520 170 L 520 240"/>
+
+  <rect x="860" y="600" width="280" height="150" rx="10" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.5"/>
+  <text x="1000" y="630" text-anchor="middle" class="h" fill="#27500A">HC-05 (master)</text>
+  <text x="1000" y="650" text-anchor="middle" class="sub" fill="#27500A">AT+NAME=CTRL, BIND=&lt;arm MAC&gt;</text>
+
+  <circle cx="860" cy="680" r="5" class="dotr"/><text x="850" y="684" text-anchor="end" class="pin">VCC</text>
+  <circle cx="860" cy="705" r="5" class="dot"/><text x="850" y="709" text-anchor="end" class="pin">GND</text>
+  <circle cx="860" cy="730" r="5" fill="#1565C0"/><text x="850" y="734" text-anchor="end" class="pin">TXD</text>
+  <circle cx="1140" cy="680" r="5" fill="#2E7D32"/><text x="1150" y="684" class="pin">RXD</text>
+
+  <path class="wpos" d="M 860 680 L 780 680 L 780 610 L 620 610 L 620 520"/>
+  <path class="wgnd" d="M 860 705 L 770 705 L 770 615 L 680 615 L 680 520"/>
+  <path class="wtx"  d="M 860 730 L 760 730 L 760 620 L 440 620 L 440 520"/>
+
+  <path d="M 760 405 L 774 395 L 790 415 L 806 395 L 822 415 L 838 395 L 854 415 L 870 405" class="resistor"/>
+  <text x="815" y="383" text-anchor="middle" class="pin">R1 = 1 kΩ  (top)</text>
+  <circle cx="760" cy="405" r="4" class="dot"/>
+  <circle cx="870" cy="405" r="4" class="dot"/>
+
+  <path d="M 760 440 L 750 452 L 770 468 L 750 484 L 770 500 L 750 516 L 770 532 L 760 545" class="resistor"/>
+  <text x="782" y="495" class="pin">R2 = 2 kΩ  (to GND)</text>
+  <circle cx="760" cy="440" r="4" class="dot"/>
+  <circle cx="760" cy="545" r="4" class="dot"/>
+
+  <path class="wtx" d="M 520 520 L 520 405 L 760 405"/>
+  <path class="wrx" d="M 870 405 L 1140 405 L 1140 680"/>
+  <circle cx="760" cy="405" r="4" class="dot"/>
+
+  <path class="wgnd" d="M 760 545 L 760 600 L 680 600 L 680 520"/>
+
+  <rect x="40" y="360" width="300" height="250" rx="10" fill="#fff8e1" stroke="#b26500" stroke-width="1.4"/>
+  <text x="60" y="388" class="warn">⚠ Upload gotcha</text>
+  <text x="60" y="416" class="lbl">The Uno R4's D0/D1 are shared with the USB</text>
+  <text x="60" y="434" class="lbl">bootloader. If HC-05 TXD stays wired to D0,</text>
+  <text x="60" y="452" class="lbl">PlatformIO/IDE uploads will fail.</text>
+
+  <text x="60" y="486" class="h">Fix:</text>
+  <text x="60" y="506" class="lbl">1. Pop the TXD jumper off D0</text>
+  <text x="60" y="524" class="lbl">2. Upload firmware</text>
+  <text x="60" y="542" class="lbl">3. Re-seat the TXD jumper on D0</text>
+
+  <text x="60" y="576" class="note">(The TX line on D1 is safe to leave connected)</text>
+
+  <rect x="40" y="630" width="300" height="170" rx="10" class="legend-box"/>
+  <text x="55" y="655" class="h">Wire colour key</text>
+  <line x1="60" y1="678" x2="100" y2="678" class="wpos"/><text x="110" y="682" class="lbl">+ 5 V</text>
+  <line x1="60" y1="700" x2="100" y2="700" class="wgnd"/><text x="110" y="704" class="lbl">GND</text>
+  <line x1="60" y1="722" x2="100" y2="722" class="wan"/><text x="110" y="726" class="lbl">Analog (joystick VRx/VRy)</text>
+  <line x1="60" y1="744" x2="100" y2="744" class="wbtn"/><text x="110" y="748" class="lbl">Digital button (SW)</text>
+  <line x1="60" y1="766" x2="100" y2="766" class="wtx"/><text x="110" y="770" class="lbl">TX (Uno → HC-05)</text>
+  <line x1="60" y1="788" x2="100" y2="788" class="wrx"/><text x="110" y="792" class="lbl">RX (HC-05 → Uno)</text>
+</svg>

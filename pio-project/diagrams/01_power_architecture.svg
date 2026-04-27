@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" width="100%" role="img">
+  <title>Power architecture for the arm side</title>
+  <desc>USB powers the Mega. A separate 4xAA battery pack powers the servos. Grounds are shared. Battery + is never connected to the Mega.</desc>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="context-stroke"/>
+    </marker>
+  </defs>
+
+  <style>
+    .ttl  { font: 500 20px system-ui, sans-serif; fill: #1a1a1a; }
+    .h    { font: 500 15px system-ui, sans-serif; fill: #1a1a1a; }
+    .lbl  { font: 400 13px system-ui, sans-serif; fill: #1a1a1a; }
+    .sub  { font: 400 12px system-ui, sans-serif; fill: #555; }
+    .warn { font: 500 13px system-ui, sans-serif; fill: #c62828; }
+    .note { font: 400 12px system-ui, sans-serif; fill: #c62828; }
+    .pin  { font: 400 11px monospace; fill: #333; }
+    .box  { fill: #ffffff; stroke: #2c3e50; stroke-width: 1.4; }
+    .card { fill: #f7f5ef; stroke: #b4b2a9; stroke-width: 1; }
+    .wpos { stroke: #d32f2f; stroke-width: 4; fill: none; stroke-linecap: round; }
+    .wgnd { stroke: #263238; stroke-width: 4; fill: none; stroke-linecap: round; }
+    .wusb { stroke: #444; stroke-width: 6; fill: none; stroke-linecap: round; }
+    .forbidden { stroke: #d32f2f; stroke-width: 2; fill: none; stroke-dasharray: 6 4; }
+    .dot { fill: #263238; }
+  </style>
+
+  <text x="500" y="36" text-anchor="middle" class="ttl">Power architecture — arm side</text>
+  <text x="500" y="58" text-anchor="middle" class="sub">Servos and Arduino get power from different sources. Grounds are tied together.</text>
+
+  <rect x="60" y="110" width="160" height="110" rx="10" class="card"/>
+  <text x="140" y="145" text-anchor="middle" class="h">Laptop</text>
+  <text x="140" y="168" text-anchor="middle" class="sub">USB-A or USB-C</text>
+  <text x="140" y="190" text-anchor="middle" class="sub">5 V @ 0.5 A typ.</text>
+
+  <path class="wusb" d="M 220 165 Q 290 165 320 165"/>
+  <text x="270" y="155" text-anchor="middle" class="sub">USB cable</text>
+
+  <rect x="320" y="110" width="240" height="140" rx="8" class="box" fill="#E6F1FB" stroke="#185FA5"/>
+  <text x="440" y="135" text-anchor="middle" class="h" fill="#0C447C">Arduino Mega 2560</text>
+  <text x="440" y="153" text-anchor="middle" class="sub" fill="#0C447C">powered via USB only</text>
+  <rect x="305" y="155" width="20" height="24" fill="#888" stroke="#333" stroke-width="1"/>
+  <text x="315" y="193" text-anchor="middle" class="pin">USB</text>
+  <circle cx="338" cy="230" r="5" class="dot"/>
+  <text x="352" y="234" class="pin">GND</text>
+  <circle cx="408" cy="230" r="5" fill="#d32f2f"/>
+  <text x="420" y="234" class="pin">5V (output)</text>
+
+  <rect x="720" y="90" width="220" height="50" rx="6" fill="#fff3e0" stroke="#b26500" stroke-width="1.2"/>
+  <text x="730" y="118" class="h" fill="#b26500">Base servo</text>
+  <rect x="720" y="160" width="220" height="50" rx="6" fill="#fff3e0" stroke="#b26500" stroke-width="1.2"/>
+  <text x="730" y="188" class="h" fill="#b26500">Shoulder servo</text>
+  <rect x="720" y="230" width="220" height="50" rx="6" fill="#fff3e0" stroke="#b26500" stroke-width="1.2"/>
+  <text x="730" y="258" class="h" fill="#b26500">Elbow servo</text>
+  <rect x="720" y="300" width="220" height="50" rx="6" fill="#fff3e0" stroke="#b26500" stroke-width="1.2"/>
+  <text x="730" y="328" class="h" fill="#b26500">Claw servo (SG90)</text>
+
+  <circle cx="720" cy="105" r="4" fill="#d32f2f"/>
+  <circle cx="720" cy="120" r="4" class="dot"/>
+  <circle cx="720" cy="175" r="4" fill="#d32f2f"/>
+  <circle cx="720" cy="190" r="4" class="dot"/>
+  <circle cx="720" cy="245" r="4" fill="#d32f2f"/>
+  <circle cx="720" cy="260" r="4" class="dot"/>
+  <circle cx="720" cy="315" r="4" fill="#d32f2f"/>
+  <circle cx="720" cy="330" r="4" class="dot"/>
+
+  <rect x="340" y="430" width="280" height="140" rx="10" fill="#fafafa" stroke="#555" stroke-width="1.4"/>
+  <text x="480" y="455" text-anchor="middle" class="h">4 × AA battery pack</text>
+  <text x="480" y="472" text-anchor="middle" class="sub">≈ 6 V (alkaline) or 4.8 V (NiMH)</text>
+  <g>
+    <rect x="360" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
+    <rect x="416" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
+    <rect x="472" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
+    <rect x="528" y="490" width="48" height="60" rx="4" fill="#fff" stroke="#888" stroke-width="1"/>
+    <text x="384" y="525" text-anchor="middle" class="pin">+  −</text>
+    <text x="440" y="525" text-anchor="middle" class="pin">−  +</text>
+    <text x="496" y="525" text-anchor="middle" class="pin">+  −</text>
+    <text x="552" y="525" text-anchor="middle" class="pin">−  +</text>
+  </g>
+  <circle cx="595" cy="445" r="5" fill="#d32f2f"/>
+  <text x="608" y="449" class="pin" fill="#d32f2f">+</text>
+  <circle cx="365" cy="445" r="5" class="dot"/>
+  <text x="346" y="449" class="pin">−</text>
+
+  <path class="wpos" d="M 595 445 C 680 445, 680 107, 720 107"/>
+  <path class="wpos" d="M 645 300 C 680 300, 680 177, 720 177"/>
+  <path class="wpos" d="M 645 300 C 680 300, 680 247, 720 247"/>
+  <path class="wpos" d="M 645 300 C 680 300, 680 317, 720 317"/>
+  <circle cx="645" cy="300" r="4" class="dot" fill="#d32f2f"/>
+  <path class="wpos" d="M 595 445 L 645 445 L 645 300"/>
+
+  <path class="wgnd" d="M 365 445 L 280 445 L 280 395 L 700 395 L 700 122 L 720 122"/>
+  <path class="wgnd" d="M 280 395 L 280 230 L 338 230"/>
+  <path class="wgnd" d="M 700 395 L 700 192 L 720 192"/>
+  <path class="wgnd" d="M 700 395 L 700 262 L 720 262"/>
+  <path class="wgnd" d="M 700 395 L 700 332 L 720 332"/>
+
+  <circle cx="280" cy="445" r="4" class="dot"/>
+  <circle cx="280" cy="395" r="4" class="dot"/>
+  <circle cx="700" cy="395" r="4" class="dot"/>
+  <text x="232" y="418" class="sub">common ground</text>
+
+  <rect x="320" y="260" width="240" height="50" rx="6" fill="#ffebee" stroke="#c62828" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="440" y="282" text-anchor="middle" class="warn">✕  Do NOT jumper battery + to Mega 5V</text>
+  <text x="440" y="300" text-anchor="middle" class="note">Different supplies, different voltages — shorts them together.</text>
+
+  <rect x="60" y="480" width="240" height="120" rx="8" fill="#fafafa" stroke="#b4b2a9" stroke-width="1"/>
+  <text x="75" y="502" class="h">Wire colour key</text>
+  <line x1="78" y1="524" x2="118" y2="524" class="wpos"/>
+  <text x="128" y="528" class="lbl">+ supply (battery +)</text>
+  <line x1="78" y1="548" x2="118" y2="548" class="wgnd"/>
+  <text x="128" y="552" class="lbl">Ground (− / GND)</text>
+  <line x1="78" y1="572" x2="118" y2="572" class="wusb"/>
+  <text x="128" y="576" class="lbl">USB (5 V + data)</text>
+
+  <text x="500" y="612" text-anchor="middle" class="sub">One rule: servos eat from the battery, the Mega eats from USB, and the grounds shake hands.</text>
+</svg>
