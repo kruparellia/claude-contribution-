@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Joystick Control of MG996R Servos with Arduino UNO R4</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a2d;
+      --panel2: #1a2338;
+      --text: #eaf0ff;
+      --muted: #aab8d6;
+      --accent: #63b3ed;
+      --accent2: #68d391;
+      --warn: #f6ad55;
+      --danger: #fc8181;
+      --line: #31415f;
+      --code: #0a0f1e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: linear-gradient(180deg, #09101f 0%, #0b1020 100%);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    .hero, .card {
+      background: rgba(19,26,45,0.95);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 { margin: 0 0 10px; }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.35rem; margin-top: 6px; }
+    h3 { font-size: 1rem; margin-top: 12px; }
+    p { margin: 8px 0 12px; }
+    .sub { color: var(--muted); }
+    .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #0c1325;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .note {
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin: 10px 0;
+      border: 1px solid var(--line);
+    }
+    .info { background: rgba(99,179,237,0.10); }
+    .good { background: rgba(104,211,145,0.10); }
+    .warn { background: rgba(246,173,85,0.12); }
+    .danger { background: rgba(252,129,129,0.10); }
+    ul, ol { margin: 8px 0 12px 20px; }
+    li { margin: 7px 0; }
+    pre {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 0.94rem;
+      line-height: 1.45;
+      color: #dbe7ff;
+    }
+    code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1px 6px;
+      color: #b8d8ff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #0b1327; }
+    .small { color: var(--muted); font-size: 0.95rem; }
+    a { color: #8cc8ff; }
+    .diagram {
+      background: #0b1327;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      overflow-x: auto;
+    }
+    .footer {
+      color: var(--muted);
+      text-align: center;
+      margin-top: 18px;
+      font-size: 0.92rem;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Controlling an MG996R Servo with a Joystick and Arduino UNO R4</h1>
+      <p class="sub">A practical starter guide for your robotic arm project. This focuses on one joystick and one MG996R first, because that is the safest way to prove the control method before you scale up to multiple joints and mechanical load.</p>
+      <div class="badges">
+        <div class="badge">Start with 1 servo + 1 joystick</div>
+        <div class="badge">Use external 5–6 V servo power</div>
+        <div class="badge">Use the joystick from the SunFounder kit first</div>
+        <div class="badge">Keep angle limits conservative</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1) Recommended first approach</h2>
+      <p>For a first working prototype, use:</p>
+      <ul>
+        <li><strong>Arduino UNO R4 Minima</strong></li>
+        <li><strong>SunFounder joystick module</strong></li>
+        <li><strong>One MG996R servo motor</strong></li>
+        <li><strong>External 5–6 V power supply for the servo</strong></li>
+        <li>Common ground between the Arduino and the servo power supply</li>
+      </ul>
+      <div class="note good">
+        <strong>Why this is the best first step:</strong> it lets you tune the joystick feel, prove the servo wiring, and learn the safe angle range of the MG996R before you attach a heavy mechanical arm.
+      </div>
+      <div class="note warn">
+        <strong>Important:</strong> do not power an MG996R directly from the Arduino 5 V pin when you are doing real motion tests. The MG996R is a higher-current servo and can draw large current spikes, especially when loaded or stalled.
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>2) Parts and what each one does</h2>
+        <ul>
+          <li><strong>Joystick module:</strong> gives two analog readings (X and Y) and one push-button switch.</li>
+          <li><strong>Arduino UNO R4:</strong> reads the joystick and sends position commands to the servo.</li>
+          <li><strong>MG996R servo:</strong> contains an internal motor, gears, control circuit, and position feedback inside the servo so it can move to a commanded angle.</li>
+          <li><strong>External power supply:</strong> provides enough current for the servo without browning out the Arduino.</li>
+        </ul>
+        <div class="note info">
+          The joystick from the SunFounder kit is enough to start. You do <strong>not</strong> need a second joystick yet unless later you want a more natural two-hand or multi-axis control style.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3) Things to be aware of before you wire it</h2>
+        <ul>
+          <li>Do not force the servo horn by hand when powered.</li>
+          <li>Do not command angles beyond the real mechanical range of your servo setup.</li>
+          <li>Do not let the servo push into a hard stop for long periods.</li>
+          <li>Do not attach a heavy arm immediately. Bench-test the control first.</li>
+          <li>If the servo buzzes harshly at an endpoint, reduce the allowed angle range immediately.</li>
+        </ul>
+        <div class="note danger">
+          <strong>Most important safety point:</strong> if the servo is commanded past its safe endpoint, current rises sharply and the servo can overheat, stall, or damage the mechanism.
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4) Wiring / connections to the Arduino UNO R4</h2>
+      <p>Use the wiring below for your first test rig.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Part</th>
+            <th>Pin / wire</th>
+            <th>Connect to</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Joystick module</td>
+            <td>VCC</td>
+            <td>UNO R4 5V</td>
+            <td>The joystick module is low current and is fine from the board 5V.</td>
+          </tr>
+          <tr>
+            <td>Joystick module</td>
+            <td>GND</td>
+            <td>UNO R4 GND</td>
+            <td>Required reference for analog readings.</td>
+          </tr>
+          <tr>
+            <td>Joystick module</td>
+            <td>VRx</td>
+            <td>A0</td>
+            <td>X-axis analog input.</td>
+          </tr>
+          <tr>
+            <td>Joystick module</td>
+            <td>VRy</td>
+            <td>A1</td>
+            <td>Y-axis analog input (unused in the first sketch, but wire it now).</td>
+          </tr>
+          <tr>
+            <td>Joystick module</td>
+            <td>SW</td>
+            <td>D2</td>
+            <td>Push-button input. The example uses <code>INPUT_PULLUP</code>.</td>
+          </tr>
+          <tr>
+            <td>MG996R servo</td>
+            <td>Signal (orange/yellow)</td>
+            <td>D9</td>
+            <td>Servo control signal from the Arduino.</td>
+          </tr>
+          <tr>
+            <td>MG996R servo</td>
+            <td>Power (red)</td>
+            <td>External 5–6 V +</td>
+            <td><strong>Do not</strong> use the Arduino 5V pin for serious servo power.</td>
+          </tr>
+          <tr>
+            <td>MG996R servo</td>
+            <td>Ground (brown/black)</td>
+            <td>External supply GND</td>
+            <td>Servo return path.</td>
+          </tr>
+          <tr>
+            <td>Arduino UNO R4</td>
+            <td>GND</td>
+            <td>External supply GND</td>
+            <td><strong>Common ground is essential.</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="diagram">
+<pre>
+         JOYSTICK MODULE                          ARDUINO UNO R4
+      ---------------------                  ----------------------
+      VCC  ------------------------------->  5V
+      GND  ------------------------------->  GND
+      VRx  ------------------------------->  A0
+      VRy  ------------------------------->  A1
+      SW   ------------------------------->  D2
+
+
+         MG996R SERVO                           EXTERNAL 5–6 V SUPPLY
+      ---------------------                  ----------------------
+      Red (+) ----------------------------->  +5 V / +6 V
+      Brown/Black (GND) ------------------->  GND
+      Orange/Yellow (Signal) ------------->  D9 on Arduino
+
+         VERY IMPORTANT
+      Arduino GND ------------------------->  External supply GND
+</pre>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>5) How the control should work</h2>
+      <ol>
+        <li>The Arduino reads the joystick X-axis with <code>analogRead(A0)</code>.</li>
+        <li>The joystick value is roughly centred in the middle when untouched.</li>
+        <li>The code maps that joystick value to a <strong>safe servo angle range</strong>.</li>
+        <li>The code applies a <strong>deadzone</strong> so the servo does not twitch around the centre.</li>
+        <li>The code applies <strong>slew/rate limiting</strong>, meaning the servo moves gradually rather than snapping instantly to the new target.</li>
+        <li>The Arduino sends the resulting target angle to the servo using the Servo library.</li>
+      </ol>
+      <div class="note info">
+        This gives you a much nicer feel than mapping the joystick directly to the servo with no filtering.
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>6) Why we use deadzone and smoothing</h2>
+        <h3>Deadzone</h3>
+        <p>The joystick never sits at a perfect centre value. If you map the raw reading directly to the servo, the servo may jitter even when you are not touching the stick. A deadzone tells the program to treat small centre movement as zero movement.</p>
+
+        <h3>Slew / rate limiting</h3>
+        <p>Instead of jumping straight to the new target angle, the code changes the servo command in small steps each loop. This makes motion look smoother and reduces shock on the gears and mechanism.</p>
+      </div>
+
+      <div class="card">
+        <h2>7) Why angle limits matter</h2>
+        <p>Not every servo really behaves like a perfect 0–180 degree device. The MG996R is often described as a standard position servo, but its safe travel depends on the exact unit, horn setup, and load.</p>
+        <ul>
+          <li>Start with a conservative range such as <strong>30° to 150°</strong>.</li>
+          <li>Only widen the range after you test carefully.</li>
+          <li>If the servo buzzes or strains at either end, reduce the allowed range.</li>
+          <li>Once a mechanical arm is attached, software limits become even more important.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>8) Starter Arduino code</h2>
+      <p>This sketch gives you a solid first version for one MG996R controlled by the joystick X-axis. It includes:</p>
+      <ul>
+        <li>safe servo angle limits,</li>
+        <li>deadzone around the joystick centre,</li>
+        <li>gradual motion for smoother control,</li>
+        <li>serial output for debugging.</li>
+      </ul>
+<pre><code>#include &lt;Servo.h&gt;
+
+Servo jointServo;
+
+// --- Pins ---
+const int joyXPin = A0;
+const int joyYPin = A1;   // not used yet, but wired for later
+const int joySWPin = 2;
+const int servoPin = 9;
+
+// --- Servo limits ---
+// Start conservatively for MG996R until you verify your real range safely
+const int servoMin = 30;
+const int servoMax = 150;
+
+// --- Joystick settings ---
+const int joyCenter = 512;     // default 10-bit centre is roughly 512
+const int deadzone = 35;       // tweak to reduce twitching
+
+// --- Motion settings ---
+float currentAngle = 90.0;
+float targetAngle  = 90.0;
+const float maxStepPerLoop = 1.5;   // lower = smoother/slower, higher = faster
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(joySWPin, INPUT_PULLUP);
+
+  jointServo.attach(servoPin);
+  jointServo.write((int)currentAngle);
+
+  delay(500); // let things settle
+}
+
+void loop() {
+  int rawX = analogRead(joyXPin);
+
+  // Deadzone around centre
+  if (abs(rawX - joyCenter) &lt; deadzone) {
+    rawX = joyCenter;
+  }
+
+  // Map joystick to safe servo angle range
+  targetAngle = map(rawX, 0, 1023, servoMin, servoMax);
+
+  // Slew-rate limit: move gradually toward target
+  if (currentAngle &lt; targetAngle) {
+    currentAngle += maxStepPerLoop;
+    if (currentAngle &gt; targetAngle) currentAngle = targetAngle;
+  } else if (currentAngle &gt; targetAngle) {
+    currentAngle -= maxStepPerLoop;
+    if (currentAngle &lt; targetAngle) currentAngle = targetAngle;
+  }
+
+  jointServo.write((int)currentAngle);
+
+  // Debug output
+  Serial.print("rawX: ");
+  Serial.print(rawX);
+  Serial.print("  target: ");
+  Serial.print(targetAngle);
+  Serial.print("  current: ");
+  Serial.println(currentAngle);
+
+  delay(10);
+}
+</code></pre>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>9) Code walkthrough</h2>
+        <h3>Pin definitions</h3>
+        <p><code>A0</code> reads the joystick X-axis. <code>A1</code> is wired ready for later expansion. <code>D2</code> reads the joystick push-button. <code>D9</code> sends the servo control signal.</p>
+
+        <h3>Servo limits</h3>
+        <p><code>servoMin</code> and <code>servoMax</code> set the allowed angle window. These stop the software from commanding extreme positions too early in development.</p>
+
+        <h3>Deadzone</h3>
+        <p>If the joystick is close to the centre value, the code snaps it back to centre so the servo does not chatter.</p>
+
+        <h3>Rate limiting</h3>
+        <p><code>maxStepPerLoop</code> limits how much the servo command changes every pass through the loop. Smaller values give smoother but slower motion.</p>
+      </div>
+
+      <div class="card">
+        <h2>10) How to tune the feel</h2>
+        <ul>
+          <li><strong>Servo too twitchy near centre?</strong> Increase <code>deadzone</code>.</li>
+          <li><strong>Servo too slow?</strong> Increase <code>maxStepPerLoop</code>.</li>
+          <li><strong>Servo too jumpy?</strong> Decrease <code>maxStepPerLoop</code>.</li>
+          <li><strong>Need a wider range?</strong> Carefully adjust <code>servoMin</code> and <code>servoMax</code>.</li>
+          <li><strong>Servo hits a stop or buzzes?</strong> Reduce the range immediately.</li>
+        </ul>
+
+        <div class="note warn">
+          Tune one thing at a time. Start with the servo disconnected from the arm mechanism if possible.
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>11) Suggested test procedure</h2>
+      <ol>
+        <li>Upload the code with the servo horn removed.</li>
+        <li>Verify the joystick values look sensible in the Serial Monitor.</li>
+        <li>Check that the servo moves smoothly left and right.</li>
+        <li>Leave the joystick centred and make sure the servo stays calm rather than twitching.</li>
+        <li>Test the safe angle limits before attaching any mechanical load.</li>
+        <li>Only then fit the horn and start linking it to your arm mechanism.</li>
+      </ol>
+      <div class="note good">
+        A very good habit is to test the servo range with no arm attached, then test again with the mechanism attached, because the real safe limits often shrink once the linkage geometry is involved.
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>12) Common problems and fixes</h2>
+        <h3>Servo jittering badly</h3>
+        <ul>
+          <li>Check the common ground.</li>
+          <li>Use a better external servo supply.</li>
+          <li>Increase the deadzone.</li>
+        </ul>
+
+        <h3>Servo resets the Arduino or causes weird behaviour</h3>
+        <ul>
+          <li>The servo is probably pulling too much current from the wrong supply path.</li>
+          <li>Move the servo to a proper external 5–6 V source.</li>
+        </ul>
+
+        <h3>Servo buzzes at one end</h3>
+        <ul>
+          <li>You are likely commanding past its safe endpoint or into a hard mechanical stop.</li>
+          <li>Reduce the angle range.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>13) Good next steps after this works</h2>
+        <ol>
+          <li>Use joystick X for one joint and Y for a second joint.</li>
+          <li>Use the joystick push switch to change which joint is selected.</li>
+          <li>Build the first mechanical link and test with small loads.</li>
+          <li>Add software limits per joint once the geometry is known.</li>
+          <li>Only after manual control feels reliable should you add wireless control or autonomous sensing.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>14) References / technical basis</h2>
+      <ul class="small">
+        <li>Arduino Servo library documentation and basic servo control tutorials.</li>
+        <li>Arduino UNO R4 Minima user manual / hardware documentation for power guidance.</li>
+        <li>SunFounder joystick module documentation for joystick analog pin behaviour and switch use.</li>
+        <li>MG996R datasheet sources for voltage, current, and torque guidance.</li>
+      </ul>
+    </section>
+
+    <div class="footer">Prepared as a practical setup guide for bench testing joystick-to-servo control before moving on to the full robotic arm build.</div>
+  </div>
+</body>
+</html>

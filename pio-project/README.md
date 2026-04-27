@@ -1,6 +1,6 @@
 # EE6003 Robotic Arm — Firmware
 
-PlatformIO workspace for the 4-DOF wireless arm: handheld joystick controller (Arduino Uno R4 Minima) → HC-05 Bluetooth pair → arm (Elegoo Mega 2560 R3) driving 3× MG996R + 1× SG90 servos.
+PlatformIO workspace for the 4-DOF wireless arm: handheld two-joystick controller (Arduino Uno R4 Minima) → HC-05 Bluetooth pair → arm (Elegoo Mega 2560 R3) driving 4× MG996R servos.
 
 ## Layout
 
@@ -10,6 +10,7 @@ pio-project/
 ├── WIRING.md                 # read this FIRST — power, HC-05 divider, pin map
 ├── lib/
 │   └── ArmProtocol/          # shared 7-byte framed packet + decoder
+├── scripts/                  # python helpers (flash both envs, home hotkey)
 └── src/
     ├── arm_mega/             # firmware for the Mega (on the arm)
     ├── controller_uno_r4/    # firmware for the Uno R4 (handheld)
@@ -36,25 +37,45 @@ pio run -e controller_uno_r4 -t upload
 pio device monitor -e arm_mega -b 115200
 ```
 
+### One-shot orchestrators
+
+Two Python helpers in `scripts/` (see [`scripts/README.md`](scripts/README.md)):
+
+```bash
+# Build + upload both environments back-to-back, with a prompt in the
+# middle to disconnect/reconnect the HC-05 TXD jumper on the Uno R4.
+python scripts/flash_all.py
+
+# Laptop hotkey for the home pose. Press 'h' to snap home, 'q' to quit.
+# Requires `pip install pyserial` once.
+python scripts/home.py
+```
+
 ## Bring-up order
 
 1. **Read [WIRING.md](WIRING.md)** end to end. Wire the servos + Mega with USB power only.
-2. Flash `arm_mega`, verify all 4 servos move to their initial 90° pose when powered from the 4xAA pack.
-3. Flash `hc05_configure` to the Mega, run through the AT-command sequence for each HC-05 module (one as SLAVE → "ARM", one as MASTER → "CTRL"). Write down the slave's MAC address and `AT+BIND` the master to it.
-4. Re-flash `arm_mega`. Wire up the controller (Uno R4 + joystick + master HC-05).
-5. Flash `controller_uno_r4`. Power both sides — LEDs on both HC-05s should go to slow double-blink within ~5 seconds. Joystick drives the arm.
+2. Flash `arm_mega`, verify all 4 servos move to their initial pose when the 6 V bench PSU is switched on.
+3. (Already done in this build — the HC-05 pair is configured and bonded. If you ever swap modules: flash `hc05_configure` to the Mega and walk the AT-command sequence to set one as SLAVE → "ARM", one as MASTER → "CTRL", then `AT+BIND` the master to the slave's MAC.)
+4. Wire up the controller (Uno R4 + **two** KY-023 joysticks + master HC-05).
+5. Flash `controller_uno_r4`. Power both sides — LEDs on both HC-05s should go to slow double-blink within ~5 seconds. Both joysticks drive the arm.
 
 ## Known pitfalls
 
 - **HC-05 RX is 3.3 V logic.** The wiring guide shows the 1 kΩ (top) / 2 kΩ (bottom) voltage divider. Skipping this slowly destroys the module.
 - **Uno R4 Minima D0/D1** are shared with USB upload. Unplug the HC-05 TXD from D0 while uploading, then reconnect.
-- **Servo power ≠ Arduino power.** 4 servos easily pull > 1 A, which a 500 mA USB port cannot supply without browning out the Mega mid-frame. Always power servos from the battery pack, with common ground to the Mega.
+- **Servo power ≠ Arduino power.** 4× MG996R can briefly pull >5 A. The Mega's 5 V rail cannot supply that — power servos from the bench PSU only, with common ground back to the Mega.
 
-## Control scheme (one joystick, 4 DOF)
+## Control scheme (two joysticks, 4 DOF)
 
-- Joystick **X / Y**: rate control (velocity) on the current axis pair.
-- **Short press SW**: toggle between axis pair A (base + shoulder) and pair B (elbow + claw).
-- **Long press SW (≥ 1 s)**: snap the arm back to the home pose (all axes 90°).
+| Stick                | X-axis      | Y-axis        |
+|----------------------|-------------|---------------|
+| Joystick 1 (left)    | base        | shoulder      |
+| Joystick 2 (right)   | claw        | elbow         |
+
+- Each axis is **rate-controlled** — joystick deflection sets velocity, not position.
+- **Long-press either SW (≥ 1 s)** snaps the arm back to the home pose (all axes 90°).
+- **Short-press SW** is reserved (currently a no-op).
+- Compile-time switch `DIAGONAL_GATE` in `src/controller_uno_r4/main.cpp` — set to `1` to force one-axis-at-a-time motion per stick (whichever axis has the larger deflection wins). Default `0` allows simultaneous X+Y.
 
 ## Next steps (for the EE6003 60%+ bands)
 
