@@ -29,9 +29,12 @@ Run
 
 import argparse
 import time
+from pathlib import Path
 
 import cv2
 import numpy as np
+
+from shape_match import ShapeMatcher
 
 # ---------------------------------------------------------------------------
 # Colour definitions
@@ -93,6 +96,16 @@ MIN_BLOB_AREA   = 1500   # px² — contours smaller than this are ignored
 MORPH_KERNEL_SZ = 7      # px — side length of the elliptical morphology kernel
 SIDEBAR_W       = 210    # px — width of the right-side stats panel
 CAM_W, CAM_H    = 640, 480
+
+# Object-identity check (shape + colour signature) — gates the colour stage
+# so we only call a red blob "the rock" when its 7-D signature matches the
+# reference distribution built by build_shape_refs.py.
+TARGET_COLOUR   = "RED"
+TARGET_REFS     = Path("vision/refs/red_rock_shape.npz")
+MATCH_Z_TOL     = 2.5     # per-feature stddev tolerance
+MATCH_MIN_FEATS = 5       # of the 7 features that must be in range
+MATCH_MAX_TOTAL = 12.0    # cap on total z (rejects one-feature outliers)
+MATCH_BOX_BGR   = (0, 255, 0)   # green box when the target is identified
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +244,20 @@ def _draw_sidebar(frame: np.ndarray, entries: list) -> np.ndarray:
 def main(camera_index: int = 0) -> None:
     global MIN_BLOB_AREA
 
+    # Load the shape+colour signature. If it's missing we still run colour
+    # detect, just without identity gating — useful while collecting refs.
+    matcher = None
+    if TARGET_REFS.exists():
+        matcher = ShapeMatcher(
+            TARGET_REFS,
+            z_tol=MATCH_Z_TOL,
+            min_features=MATCH_MIN_FEATS,
+            max_total_z=MATCH_MAX_TOTAL,
+        )
+        print(f"[colour_detect] loaded shape refs from {TARGET_REFS}")
+    else:
+        print(f"[colour_detect] {TARGET_REFS} not found — running without identity gating")
+
     cap = cv2.VideoCapture(camera_index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  CAM_W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_H)
@@ -287,10 +314,22 @@ def main(camera_index: int = 0) -> None:
 
                 x, y, w, h = cv2.boundingRect(cnt)
                 conf  = _blob_confidence(clean[y : y + h, x : x + w])
-                label = f"{colour['name']}  {conf:.0f}%"
 
-                cv2.rectangle(frame, (x, y), (x + w, y + h), bgr, 2)
-                _draw_label(frame, label, x, y, w, h, bgr)
+                # For the target colour, run the shape+colour identity check
+                # on the contour. Other colours just keep the original label.
+                box_bgr = bgr
+                if matcher is not None and colour["name"] == TARGET_COLOUR:
+                    is_target, n_in, total_z, _ = matcher.score(cnt, hsv)
+                    if is_target:
+                        label   = f"ROCK  ok={n_in}/7  z={total_z:.1f}"
+                        box_bgr = MATCH_BOX_BGR
+                    else:
+                        label   = f"{colour['name']}  ok={n_in}/7  z={total_z:.1f}"
+                else:
+                    label = f"{colour['name']}  {conf:.0f}%"
+
+                cv2.rectangle(frame, (x, y), (x + w, y + h), box_bgr, 2)
+                _draw_label(frame, label, x, y, w, h, box_bgr)
 
         # ---- Debug overlay ----
         if debug:
