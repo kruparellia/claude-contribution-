@@ -1,0 +1,81 @@
+% =====================================================================
+% Background and Literature Review  --  TARGET: ~600 words
+% Marking weight: 10 marks (combined with abstract + intro)
+% =====================================================================
+\section{Background and Literature Review}
+\label{sec:literature}
+
+\guide{
+The marking rubric for 1st+ wants \textbf{critical analysis with deep
+insights and strong academic references}. Aim for $\geq$10 cited
+sources spread across the four sub-topics below. Do not just list
+papers; \emph{compare} them and \emph{say what your project takes from
+each}.
+
+The four sub-topics map directly onto the brief:
+\begin{enumerate}
+  \item Industrial automation \& multi-DOF arms (need / DOF theory /
+        ISO~9283 metrics).
+  \item Wireless protocols (BT Classic vs BLE vs Zigbee vs Wi-Fi vs
+        nRF24): include a trade-off table.
+  \item Microcontroller selection (Arduino vs Pi vs ESP32) — this is
+        where you justify rejecting the Pi for real-time control.
+  \item Closed-loop control \& feedback sensing (PID, potentiometer
+        vs encoder vs force sensor).
+\end{enumerate}
+References~\cite{ifr2024,siciliano2009,spong2020,astrom2008,iso9283,
+ieee802151,ieee802154,gomez2012,baker2005,atmega2560} are already
+seeded in references.bib --- use them and add 3--4 more recent
+(2022--2025) papers per sub-topic for currency.
+}
+
+\subsection{Articulated manipulators and degrees of freedom}
+\placeholder{[\ldots one paragraph on industrial-arm DOF theory,
+citing Siciliano~\cite{siciliano2009} and Spong~\cite{spong2020};
+explain why 4-DOF + gripper is the natural minimum for sort tasks
+and matches the brief\ldots]}
+
+\subsection{Performance metrics for educational manipulators}
+\placeholder{[\ldots one paragraph introducing ISO~9283 repeatability
+and accuracy metrics~\cite{iso9283}; contrast industrial sub-mm
+performance with what's achievable with hobby servos; explain that
+closing the loop on potentiometer feedback is the standard
+mitigation\ldots]}
+
+\subsection{Wireless protocols for embedded teleoperation}
+\guide{This is the strongest place to demonstrate critical analysis.
+Compare at least four protocols. The structure that scores well:
+\begin{itemize}
+  \item One sub-paragraph per protocol (Bluetooth Classic, BLE,
+        Zigbee, Wi-Fi). For each, note: data rate, latency, power,
+        topology limit, and one named drawback.
+  \item Closing paragraph: explain why Bluetooth Classic via HC-05
+        was chosen, citing Baker's comparison~\cite{baker2005} and
+        Gomez et al.~\cite{gomez2012}.
+  \item Mention 2.4\,GHz interference and adaptive frequency hopping.
+\end{itemize}
+A trade-off table here picks up easy marks.}
+
+\placeholder{[\ldots three to four short sub-paragraphs on the four
+protocols, then a justification paragraph for HC-05\ldots]}
+
+\subsection{Microcontroller selection for real-time control}
+\guide{This is where the Pi-vs-Arduino debate goes. Key bullets:
+non-deterministic Linux scheduling, no native ADC, long boot, high
+idle current. Cite the ATmega datasheet~\cite{atmega2560}. Land on
+the compromise: Arduino for real-time motor control, Pi (or ESP32)
+as a vision \emph{co-processor} only.}
+
+\placeholder{[\ldots one paragraph rejecting the Pi for hard real-time
+control, then justifying Arduino Mega for motor/feedback work and
+introducing the heterogeneous architecture used here\ldots]}
+
+\subsection{Closed-loop joint control}
+\guide{Short. Cite \AA str\"om \& Murray~\cite{astrom2008}; mention
+discrete-time PID at 50--200\,Hz; contrast potentiometer feedback
+(absolute, cheap, low-resolution) with encoders (relative, expensive,
+high-resolution) and force sensors. Set up
+Section~\ref{sec:closedloop} to do the implementation detail.}
+
+\placeholder{[\ldots one short paragraph on PID for servo joints,
+ending by forward-referencing the implementation section\ldots]}

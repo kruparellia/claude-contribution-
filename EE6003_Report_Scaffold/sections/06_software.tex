@@ -1,0 +1,143 @@
+% =====================================================================
+% Software Development  --  TARGET: ~700 words
+% Marking weight: 15 marks. THIS IS THE HIGHEST-LEVERAGE SECTION FOR
+% BREAKING THE 60% CAP. The 1st+ rubric explicitly names ISRs,
+% FreeRTOS, state machines, structured protocols.
+% =====================================================================
+\section{Software Development}
+\label{sec:software}
+
+\guide{
+This is where most of your advanced-feature claims should land. The
+1st+ rubric wants ``highly efficient, modular and well-documented
+code with real-time performance optimisations, robust error handling.''
+Six sub-sections, in this order:
+\begin{enumerate}
+  \item Main control loops (one paragraph each for Controller and
+        Arm).
+  \item Wireless protocol (custom 7-byte frame --- this is your
+        biggest single advanced claim; include the listing).
+  \item Closed-loop joint control (PID, ISR-driven).
+  \item Operational modes \& FSM (autonomous-mode state diagram).
+  \item Vision co-processor integration.
+  \item Documentation \& testing.
+\end{enumerate}
+Use the listings package to embed code excerpts (already loaded in
+main.tex). Don't copy-paste big blocks --- 5--15 lines max per
+listing, with comments.
+}
+
+\subsection{Main control loops}
+\placeholder{[\ldots one paragraph for the Controller's super-loop:
+joystick read $\rightarrow$ dead-band $\rightarrow$ scale to angle
+$\rightarrow$ pack into frame $\rightarrow$ TX at 50\,Hz. One
+paragraph for the Arm's super-loop: UART servicing, 100\,Hz PID per
+joint, vision UART, FSM update, 500\,ms link-loss watchdog.\ldots]}
+
+\subsection{Wireless protocol}
+\label{sec:protocol}
+\guide{The custom packet format is a strong advanced claim. Show:
+\begin{itemize}
+  \item The frame layout as a table or inline diagram.
+  \item Why each field is what it is (start byte for re-sync; XOR
+        for cheap single-bit error detection on AVR; 1-byte angles
+        because servo resolution is the bottleneck).
+  \item Bit-rate calculation: $7\,\text{B}\times 10\,\text{bits/B}\times 50\,\text{Hz} = 3.5\,\text{kbit/s}$
+        well inside HC-05's 9600 baud.
+  \item Failure modes: bad checksum $\rightarrow$ drop frame; no
+        valid frame for 500\,ms $\rightarrow$ park in safe pose.
+\end{itemize}
+Then embed the encoder/decoder listing.}
+
+\placeholder{[\ldots one or two paragraphs explaining the frame format
+and rationale\ldots]}
+
+\begin{lstlisting}[caption={Frame encoder/decoder (excerpt from
+\texttt{lib/ArmProtocol/ArmProtocol.h}).},label=lst:proto]
+inline void encode(const Frame& f, uint8_t out[FRAME_SIZE]) {
+    out[0] = START_BYTE;
+    out[1] = f.base;     out[2] = f.shoulder;
+    out[3] = f.elbow;    out[4] = f.claw;
+    out[5] = f.flags;    out[6] = checksum(f);
+}
+
+bool Decoder::feed(uint8_t b, Frame& out) {
+    buf_[idx_++] = b;
+    if (idx_ == 1 && buf_[0] != START_BYTE) { idx_ = 0; return false; }
+    if (idx_ < FRAME_SIZE) return false;
+    idx_ = 0;
+    Frame f { buf_[1], buf_[2], buf_[3], buf_[4], buf_[5] };
+    return checksum(f) == buf_[6] ? (out = f, true) : false;
+}
+\end{lstlisting}
+
+\subsection{Closed-loop joint control}
+\label{sec:closedloop}
+\guide{Show: the standard discrete PID equation; the 100\,Hz timer
+ISR; anti-windup clamp on the integrator; what was tuned and how.
+A step-response plot ($K_p$ alone, then PI, then PID) is a strong
+1st-class artefact --- include even a rough one.}
+
+\placeholder{[\ldots one paragraph on the PID and tuning
+methodology\ldots]}
+
+% TODO FIGURE: step-response plot from serial logger
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Step-response plot: commanded vs measured angle on one
+  joint, showing $K_p$, PI and full-PID traces.]}\vspace{4pt}}}
+  \caption{Closed-loop step response (placeholder).}
+  \label{fig:stepresp}
+\end{figure}
+
+\subsection{Operational modes and finite state machine}
+\label{sec:fsm}
+\guide{Draw the FSM in TikZ or import as PDF. The states required by
+the brief: IDLE $\rightarrow$ SCAN $\rightarrow$ DETECT $\rightarrow$
+CLASSIFY $\rightarrow$ PICK $\rightarrow$ PLACE $\rightarrow$
+COUNT\_CHECK, with a SAFE state covering checksum-fail, link-loss
+and e-stop. Mention the $\geq$5-item brief target. The FSM is named
+in the 1st+ rubric --- don't skip the diagram.}
+
+\placeholder{[\ldots one paragraph describing the FSM, listing each
+state and its transition conditions, and how mode switching from
+manual is gated\ldots]}
+
+% TODO FIGURE: autonomous-mode state diagram (TikZ or PDF)
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[State diagram: IDLE / SCAN / DETECT / CLASSIFY / PICK /
+  PLACE / COUNT\_CHECK / SAFE.]}\vspace{4pt}}}
+  \caption{Autonomous-mode finite state machine (placeholder).}
+  \label{fig:fsm}
+\end{figure}
+
+\subsection{Vision co-processor integration}
+\guide{Brief paragraph saying the vision co-processor publishes a
+one-line ASCII record \texttt{CAM,<state>,<colour>,<pct>$\backslash$n}
+to the Mega's Serial1, and that the autonomous-mode FSM consumes this
+record in the CLASSIFY state. Forward-reference
+Section~\ref{sec:vision}.}
+
+\placeholder{[\ldots one paragraph on the camera UART protocol and
+how the FSM consumes it\ldots]}
+
+\subsection{Documentation and testing}
+\guide{Mention: code organised as a PlatformIO mono-repo with three
+build environments; protocol library is host-testable; in-tree unit
+tests cover encode/decode round-trip + checksum rejection +
+re-synchronisation. List the number of tests passing.}
+
+\placeholder{[\ldots short paragraph on code organisation, comments,
+and host-side unit tests\ldots]}
+
+\corehit{Brief Objectives 1, 2, 5 and~6: digital command packets
+captured at the controller, transmitted wirelessly, received and
+acted on at the arm; manual and autonomous modes both implemented.}
+
+\advhit{[\ldots e.g.\ custom 7-byte framed UART protocol with
+start-byte re-synchronisation, XOR checksum, link-loss watchdog;
+ISR-driven 100\,Hz PID with anti-windup; explicit FSM with SAFE
+fault state; host-side unit tests for the protocol\ldots]}

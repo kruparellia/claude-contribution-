@@ -1,0 +1,77 @@
+% =====================================================================
+% EE6003 Embedded Systems -- Group Coursework Report
+% Advanced Industrial Robotic Arm using RF Wireless Communication
+% Dyson Institute of Engineering + Technology
+%
+% Compile with pdfLaTeX. Bibliography uses IEEEtran (built into Overleaf).
+% =====================================================================
+\documentclass[conference,letterpaper]{IEEEtran}
+
+% --- Math, graphics, tables ---
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+
+% --- Code listings (firmware snippets in appendix) ---
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{gray!70!black}\itshape,
+  stringstyle=\color{red!60!black},
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=6pt,
+  frame=single, breaklines=true, columns=fullflexible,
+  language=C++,
+  morekeywords={uint8_t,uint16_t,uint32_t,size_t,constexpr,override}
+}
+
+% --- Hyperlinks (load last) ---
+\usepackage[hidelinks]{hyperref}
+\usepackage{cite}
+
+% --- Helper: highlight core / advanced labels ---
+\newcommand{\corehit}[1]{\par\noindent\textbf{Core requirement addressed:} \emph{#1}\par}
+\newcommand{\advhit}[1]{\par\noindent\textbf{Advanced feature claim:} \emph{#1}\par}
+
+% =====================================================================
+% Title block
+% =====================================================================
+\title{Advanced Industrial Robotic Arm using RF Wireless Communication
+       for Industrial Applications}
+
+\author{
+  \IEEEauthorblockN{Group X --- EE6003 Embedded Systems, Semester 2 (2025--26)}
+  \IEEEauthorblockA{Dyson Institute of Engineering + Technology \\
+                    Module Lead: Srilatha Pamuri \\
+                    Submission: 25 June 2026}
+}
+
+\begin{document}
+\maketitle
+
+% =====================================================================
+% Abstract & Body
+% =====================================================================
+\input{sections/01_abstract}
+\input{sections/02_introduction}
+\input{sections/03_literature_review}
+\input{sections/04_system_design}
+\input{sections/05_hardware}
+\input{sections/06_software}
+\input{sections/07_arm_design}
+\input{sections/08_testing}
+\input{sections/09_teamwork}
+\input{sections/10_conclusion}
+
+% =====================================================================
+% Bibliography
+% =====================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

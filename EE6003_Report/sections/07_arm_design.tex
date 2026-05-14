@@ -1,0 +1,115 @@
+% =====================================================================
+% Robotic Arm Design & 3D Printing  +  Computer Vision Subsystem
+% (~430 words combined; intentionally lighter on assembly per author)
+% =====================================================================
+\section{Mechanical Design and Computer-Vision Subsystem}
+\label{sec:cad}
+
+\subsection{Mechanical design and 3D printing}
+The mechanical structure is a 4-DOF articulated arm with a single-DOF
+gripper, built from PLA 3D-printed parts and standard hobby servos.
+The link geometry is derived from the EEZYbotARM family with the
+following original modifications: a redesigned base plate to mount the
+HC-05, microcontroller and a power distribution board on a single
+removable tray; a custom mounting bracket for the joint potentiometer
+on each axis; and a bespoke gripper with a wider opening to accommodate
+the coloured blocks used in the autonomous test set.
+
+% TODO FIGURE: SolidWorks render or screenshot of the arm assembly.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[CAD render of the arm assembly --- SolidWorks isometric view.
+  To be exported as PDF/PNG and included here.]}\vspace{4pt}}}
+  \caption{Isometric CAD render of the arm assembly (placeholder).}
+  \label{fig:cadrender}
+\end{figure}
+
+Parts were printed on an FDM printer using PLA at 0.2\,mm layer
+height, 30\,\% gyroid infill, 3 perimeters and tree supports where
+overhangs exceeded 60$^\circ$. Material was chosen for its dimensional
+stability and the absence of post-processing requirements at this
+load class; tougher materials such as PETG or carbon-fibre nylon
+were rejected on the basis that the arm is bench-only and never
+subject to thermal cycling. Iterative DFM tweaks made between the
+first and second prints included widening the M3 servo-horn pockets
+by 0.2\,mm to absorb FDM tolerance, adding a chamfer to the elbow
+linkage to clear the shoulder bracket at full extension, and
+relocating the potentiometer mounts to keep the wiper wires inside
+the link rather than on the outside surface.
+
+\subsection{Computer-vision subsystem}
+\label{sec:vision}
+The autonomous mode requires the arm to identify the colour of the
+object presented to it. Two iterations of the vision pipeline were
+built.
+
+\subsubsection{First iteration --- ESP32 WROVER CAM}
+A Freenove ESP32 WROVER CAM was initially used. The camera
+streams QQVGA RGB565 frames into the ESP32, which converts each pixel
+to integer HSV and bins it into one of four colour classes (red,
+green, blue, yellow) with a 4\,\% presence threshold to suppress
+background. The result is published as a one-line ASCII record over
+\texttt{Serial2} to the Mega's \texttt{Serial1}:
+\begin{center}\ttfamily\small
+CAM,<state>,<colour>,<pct>$\backslash$n
+\end{center}
+This subsystem was wired in over a single GPIO~17~$\rightarrow$~Mega
+pin~19 line plus shared ground; no level shift is required because
+the ESP32 transmits 3.3\,V into the Mega's 5\,V tolerant RX. Initial
+testing confirmed correct classification of the four colours under
+controlled bench lighting.
+
+% TODO PHOTO: ESP32 + camera mounted on bench, with the laptop
+% showing the live colour-classification output.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Photograph of the ESP32 WROVER CAM mounted to the arm base
+  during the first iteration, with the live colour classification
+  visible in the serial monitor on the laptop.]}\vspace{4pt}}}
+  \caption{ESP32 WROVER CAM during the first vision iteration
+  (photo placeholder).}
+  \label{fig:esp32cam}
+\end{figure}
+
+\subsubsection{Second iteration --- Raspberry Pi camera module}
+In extended testing the ESP32 pipeline proved sensitive to ambient
+lighting changes and exhibited occasional false classifications at
+the boundary between green and yellow. The pipeline was therefore
+re-implemented on a Raspberry Pi with a CSI camera module, where a
+larger frame size, floating-point HSV conversion and a small
+classical-CV pipeline (Gaussian blur, HSV thresholding,
+contour-area filtering) gave substantially more reliable
+classification across a wider range of conditions. The Pi reports
+its result to the Mega using the same one-line ASCII protocol on
+the same Mega UART pin, so no firmware changes were required on
+the arm side --- the Mega is agnostic to which co-processor is
+producing the frames.
+
+% TODO PHOTO: Pi + camera module mounted to arm.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Photograph of the Raspberry Pi + camera module mounted to
+  the arm during the second vision iteration. To be added once the
+  Pi pipeline is fully integrated.]}\vspace{4pt}}}
+  \caption{Raspberry Pi + camera module during the second iteration
+  (photo placeholder).}
+  \label{fig:picam}
+\end{figure}
+
+The Pi is treated strictly as a vision co-processor: all real-time
+motor control remains on the Mega, preserving the embedded-systems
+character of the project. This is consistent with the Pi vs Arduino
+position summarised in Section~\ref{sec:literature}.
+
+\corehit{Brief Objective~3 and the CAD/3D-printing rubric: original
+CAD modifications, FDM print parameters justified, fabrication
+performed in-house.}
+
+\advhit{Two iterations of an embedded computer-vision pipeline
+(on-device HSV on ESP32; classical CV on the Pi); shared
+single-protocol UART link so the arm-side firmware is unchanged
+between iterations; multi-MCU heterogeneous architecture with
+clean separation of real-time and non-real-time concerns.}

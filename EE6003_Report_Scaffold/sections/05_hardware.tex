@@ -1,0 +1,129 @@
+% =====================================================================
+% Hardware Implementation  --  TARGET: ~600 words
+% Marking weight: 20 marks (the biggest single rubric row)
+% Brief asks for: assembly, sensors + interfacing, schematics, power
+% management & protection, hardware challenges.
+% =====================================================================
+\section{Hardware Implementation}
+\label{sec:hardware}
+
+\guide{
+Twenty marks --- this section needs to be rich. The 1st+ rubric wants
+``industrial-quality hardware design with strong reliability,
+protection, and performance optimisation.'' Five sub-sections:
+\begin{enumerate}
+  \item Bill of materials \& physical assembly.
+  \item Sensor interfacing (joystick axes, joint potentiometers, IR
+        proximity for autonomous mode).
+  \item Schematics (already drawn --- include figures for arm
+        wiring, controller wiring, HC-05 divider).
+  \item Power architecture details + decoupling, current-rail
+        separation.
+  \item Hardware challenges and how they were resolved.
+\end{enumerate}
+The last sub-section is where you score the ``robustness improvements''
+language in the 1st+ rubric --- e.g.\ servo brown-out fixed by
+adding bulk caps, ADC noise cleaned by RC filtering, etc.
+}
+
+\subsection{Bill of materials and physical assembly}
+\placeholder{[\ldots one short paragraph listing the principal
+components: Mega 2560, Uno R4 Minima, 3 $\times$ MG996R, 1 $\times$ SG90,
+HC-05 pair, 4 $\times$ 10\,k$\Omega$ potentiometers, joysticks, IR
+sensor. Then a paragraph on the mechanical assembly --- which member
+built it, what tooling was used, what torque values for the servo
+horns, and how cables were routed.\ldots]}
+
+% TODO PHOTO: assembled arm on the bench with cabling tidy.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.92\columnwidth}{\centering\vspace{4pt}
+    \emph{[Photograph of the assembled arm on the bench. Add once
+    final assembly is complete.]}\vspace{4pt}}}
+  \caption{Assembled arm prototype (photo placeholder).}
+  \label{fig:armphoto}
+\end{figure}
+
+\subsection{Sensor interfacing}
+\guide{For each sensor, write: working principle (1 sentence),
+electrical interface to the MCU (pin / peripheral), and what was done
+to clean the signal (filter, averaging, dead-band). This last bit is
+where the rubric's ``correctly interfaced hardware'' language lives.}
+
+\paragraph{Joystick axes}
+\placeholder{[\ldots KY-023 thumbstick, two analog axes 0--3.3\,V,
+ADC sampling at $\geq$200\,Hz, dead-band of $\pm$X counts to suppress
+quiescent jitter\ldots]}
+
+\paragraph{Joint potentiometers}
+\placeholder{[\ldots 10\,k$\Omega$ linear pot per joint, geared or
+directly coupled, RC low-pass on wiper, ADC sampled at 100\,Hz under
+timer ISR, 16-sample boxcar average\ldots]}
+
+\paragraph{IR proximity (autonomous mode)}
+\placeholder{[\ldots short-range IR module gating the DETECT state of
+the autonomous FSM\ldots]}
+
+\subsection{Wiring schematics}
+\guide{Refer to the three SVG-derived figures already in
+\texttt{figures/}: arm wiring, controller wiring, HC-05 voltage
+divider. One paragraph of prose around them, calling out the
+voltage-divider on HC-05 RX as a deliberate design decision.}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{03_arm_wiring.pdf}
+  \caption{Arm-side wiring: Mega 2560, four servos, HC-05 slave on
+  Serial1, joint potentiometers on the analog inputs.}
+  \label{fig:armwiring}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{04_controller_wiring.pdf}
+  \caption{Controller-side wiring: Uno R4 Minima, two KY-023
+  joysticks, mode button, HC-05 master on Serial1.}
+  \label{fig:ctrlwiring}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.65\columnwidth]{02_hc05_voltage_divider.pdf}
+  \caption{HC-05 RX voltage divider: 2\,k$\Omega$/1\,k$\Omega$ drops
+  the 5\,V Arduino TX to $\sim$3.3\,V at the HC-05 RX pin.}
+  \label{fig:hc05div}
+\end{figure}
+
+\placeholder{[\ldots one paragraph of prose tying the three figures
+together and noting the protection rationale\ldots]}
+
+\subsection{Power and protection}
+\placeholder{[\ldots one paragraph: split rails, decoupling caps,
+common ground, fuse / polyswitch (if used), e-stop button wired into
+the controller as an interrupt-driven flag\ldots]}
+
+\subsection{Hardware challenges and resolutions}
+\guide{This is the rubric's ``robustness improvements'' slot.
+Concrete examples to cover:
+\begin{itemize}
+  \item Servo brown-out / Mega resetting under simultaneous motion ---
+        fix: add 470\,$\mu$F bulk capacitor on the servo rail.
+  \item ADC noise on potentiometer reads --- fix: RC filter +
+        averaging.
+  \item HC-05 RX 5\,V tolerance --- fix: voltage divider.
+  \item Crosstalk on the breadboard --- fix: dedicated ground rail.
+\end{itemize}
+Each item is one or two sentences. Concrete numbers always score
+better than generalities.}
+
+\placeholder{[\ldots one paragraph or short bulleted list per
+challenge\ldots]}
+
+\corehit{Hardware brief Objectives 1, 3 and~5: hardware components
+assembled, sensors interfaced, motor control wired up; circuit
+schematics for both transmitter and receiver provided.}
+
+\advhit{[\ldots e.g.\ analogue-front-end design (RC filter + digital
+averaging on potentiometers); split-rail power architecture with
+documented grounding strategy; voltage-level translation on HC-05
+RX; hardware e-stop wired through firmware to a fail-safe pose.\ldots]}

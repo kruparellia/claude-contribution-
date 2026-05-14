@@ -1,0 +1,76 @@
+% =====================================================================
+% Literature Review  (~520 words)
+% =====================================================================
+\section{Background and Literature Review}
+\label{sec:literature}
+
+\subsection{Articulated manipulators and degrees of freedom}
+A manipulator's degrees of freedom set an upper bound on the classes
+of end-effector pose it can reach. Three independent joints are
+sufficient to position a point in 3-D space; six are required to also
+control orientation~\cite{siciliano2009}. Pick-and-place sorting --- the
+task targeted by the autonomous mode of this project --- is well served
+by four DOF plus a binary gripper: base rotation, shoulder, elbow, and
+a wrist axis to present the gripper correctly to the part. This is
+the configuration mandated by the brief and built here.
+
+\subsection{Performance metrics for educational manipulators}
+ISO~9283 defines the dominant performance specifications for
+manipulating industrial robots, including pose
+repeatability and pose accuracy~\cite{iso9283}. Industrial systems
+routinely achieve sub-millimetre repeatability, but cost-effective
+prototypes built from hobby-grade servos typically perform one to two
+orders of magnitude worse without additional sensing. Closing a feedback
+loop around each joint is a well-established mitigation that trades a
+small computational cost for substantially improved repeatability and
+robustness to payload variation~\cite{spong2020,siciliano2009}.
+
+\subsection{Wireless protocols for embedded teleoperation}
+The brief permits ``Bluetooth or any wireless communication'', and
+the rubric explicitly rewards a justified comparison of options. The
+2.4\,GHz ISM band hosts four families of relevance:
+Bluetooth Classic (IEEE~802.15.1), Bluetooth Low Energy (BLE), Zigbee
+(IEEE~802.15.4) and Wi-Fi (IEEE~802.11), with proprietary GFSK
+transceivers (e.g.\ Nordic nRF24-series) representing a fifth
+non-standard option~\cite{ieee802151,gomez2012,ieee802154,baker2005}.
+
+Bluetooth Classic with the Serial Port Profile (SPP) provides a
+transparent stream-oriented tunnel that emulates an RS-232 link over
+the radio --- the mode in which the HC-05 module used in this project
+operates. Adaptive frequency hopping across 79~channels of 1\,MHz
+gives good resilience against narrowband interference. Reported
+round-trip latencies for SPP on commodity modules sit in the
+30--100\,ms range~\cite{gomez2012}, which is acceptable for
+teleoperation provided the link is permanently established. BLE
+offers far lower average current at the cost of connection-interval
+quantisation; Zigbee is mesh-capable but high-latency per hop;
+Wi-Fi is high-throughput but heavy-stack and slow to associate.
+Baker's widely-cited comparison concludes that Bluetooth has the edge
+for point-to-point real-time links, while Zigbee's strength is
+scalability rather than latency~\cite{baker2005} --- a finding that
+directly supports this project's choice of Bluetooth Classic.
+
+\subsection{Microcontroller selection for real-time control}
+A Raspberry Pi was considered and rejected. Although a Pi offers
+significantly more compute, it runs Linux and therefore cannot
+guarantee deterministic timing for hard-real-time PWM and PID loops
+without specialist real-time extensions. It also lacks a native ADC,
+draws several watts at idle, and undermines the embedded-systems
+framing of the brief. By contrast, AVR microcontrollers such as the
+ATmega2560 provide deterministic execution, native PWM and ADC
+peripherals, multiple hardware UARTs and instant-on
+operation~\cite{atmega2560}. The compromise position adopted by this
+project, and detailed in Section~\ref{sec:vision}, is to keep the
+arm-side controller on the Mega for motor and feedback control, and
+introduce a more capable companion processor only for the
+computer-vision pipeline.
+
+\subsection{Closed-loop joint control}
+\AA str\"om and Murray~\cite{astrom2008} provide the canonical
+introduction to feedback control. For servo-driven joints with
+potentiometer feedback, a digital PID controller running at a fixed
+sample rate (typically 50--200\,Hz) is the standard
+choice~\cite{spong2020}. The implementation here samples each
+potentiometer at 100\,Hz under timer interrupt and applies a PID
+output to the servo's commanded angle. Section~\ref{sec:closedloop}
+documents the implementation and tuning.

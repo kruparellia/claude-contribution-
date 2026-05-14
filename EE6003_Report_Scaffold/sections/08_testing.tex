@@ -1,0 +1,103 @@
+% =====================================================================
+% Testing and Performance Evaluation  --  TARGET: ~500 words
+% Marking weight: 20 marks (joint largest with Hardware)
+% Brief asks for: accuracy, latency, repeatability, robustness; power
+% efficiency; system limitations & improvements.
+% =====================================================================
+\section{Testing and Performance Evaluation}
+\label{sec:testing}
+
+\guide{
+Twenty marks. The 1st+ rubric wants ``extensive quantitative testing
+with benchmarking and deep critical analysis'' --- so concrete numbers
+beat narrative every time. Four sub-sections, each one ending in a
+specific numerical artefact:
+\begin{enumerate}
+  \item Functional verification (sequence test, pass criteria).
+  \item Closed-loop accuracy and repeatability (ISO-9283-style;
+        $N=30$ trials with a fiducial; with and without payload).
+  \item End-to-end latency (GPIO debug-pulse pair on a shared scope;
+        histogram across $N=200$ frames).
+  \item Power and link robustness (current draw by mode; checksum
+        failure rate vs distance up to 10\,m).
+\end{enumerate}
+Finish with a results table summarising every metric, and a short
+discussion of what the data revealed (e.g.\ ``adding the bulk cap
+reduced reset events from X/min to 0''). The before/after
+optimisation evidence is the single biggest lever for marks above
+60\,\% in this rubric row.
+}
+
+\subsection{Functional verification}
+\placeholder{[\ldots one paragraph: scripted joint-by-joint sweep,
+multi-joint coordinated move through 5 waypoints, run $N=10$ times,
+pass criteria: zero checksum failures, all waypoints within
+$\pm 2^\circ$, no link-loss watchdog trips\ldots]}
+
+\subsection{Closed-loop accuracy and repeatability}
+\placeholder{[\ldots one paragraph: fiducial mounted to gripper,
+30 trials to a fixed target pose. Mean position error =
+\emph{TBC}\,mm, 1\,$\sigma$ = \emph{TBC}\,mm. Repeated with 50\,g
+payload --- closed loop expected to mask servo droop. Cite
+ISO~9283~\cite{iso9283}.\ldots]}
+
+\subsection{End-to-end latency}
+\placeholder{[\ldots one paragraph: GPIO pulse asserted at frame TX
+on controller and at servo-write on arm. Histogram across 200
+frames: mean = \emph{TBC}\,ms, $\sigma$ = \emph{TBC}\,ms. Compare to
+literature values of 30--100\,ms for HC-05 SPP~\cite{gomez2012}.
+Include the histogram as a figure.\ldots]}
+
+% TODO FIGURE: latency histogram
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Latency histogram across 200 frames, with mean and
+  $\sigma$ marked.]}\vspace{4pt}}}
+  \caption{End-to-end latency (placeholder).}
+  \label{fig:latency}
+\end{figure}
+
+\subsection{Power and link robustness}
+\placeholder{[\ldots one paragraph: steady-state current at Mega's
+$V_{in}$ and at the servo rail under three modes: idle, manual
+tracking, autonomous sort. Battery life estimate from a 4$\times$AA
+pack. Distance sweep up to 10\,m logging per-frame checksum-fail
+rate.\ldots]}
+
+\subsection{Discussion of limitations and improvements}
+\guide{Be honest --- reviewers reward critical analysis. Likely items:
+backlash in the 3D-printed gears showing as periodic position error,
+HC-05 mid-range latency tail, AA pack marginal for four
+simultaneous servo motions. For each limitation, name the planned
+mitigation (LiPo + BEC, anti-backlash gear pair, etc.).}
+
+\placeholder{[\ldots one paragraph: one limitation per sentence,
+each with its planned mitigation\ldots]}
+
+\begin{table}[t]
+  \centering
+  \caption{Performance metric summary.}
+  \label{tab:results}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{lXl}
+    \toprule
+    \textbf{Metric} & \textbf{Method} & \textbf{Result} \\
+    \midrule
+    Accuracy ($^\circ$)        & per-joint, $N=30$           & \emph{TBC} \\
+    Repeatability (1\,$\sigma$)& per-joint, $N=30$           & \emph{TBC} \\
+    End-to-end latency (ms)    & GPIO pulse, $N=200$         & \emph{TBC} \\
+    Checksum-fail rate (\%)    & 5\,m line of sight, 1\,min  & \emph{TBC} \\
+    Idle current (mA)          & Mega + servos               & \emph{TBC} \\
+    Active current (mA)        & autonomous mode             & \emph{TBC} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\corehit{Brief Objective~9: evaluate accuracy, latency, repeatability
+and robustness; methodology defined and instrumented.}
+
+\advhit{[\ldots e.g.\ quantitative bench instrumentation (GPIO pulse
+pair on a shared scope; 200-frame latency histograms;
+payload-disturbance repeatability under closed loop) used to drive
+iterative optimisation rather than ad-hoc demonstration\ldots]}

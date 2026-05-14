@@ -1,0 +1,136 @@
+% =====================================================================
+% Mechanical Design + Computer Vision  --  TARGET: ~600 words
+% Marking weight: 10 marks (CAD/3D-printing). Vision content also
+% supports the Software & Architecture rubric rows.
+% =====================================================================
+\section{Mechanical Design and Computer-Vision Subsystem}
+\label{sec:cad}
+
+\subsection{Mechanical design and 3D printing}
+\guide{
+For the 1st+ CAD rubric --- ``exceptional CAD design, optimised for
+stability, usability, real-world application'' --- you need to show:
+\begin{itemize}
+  \item That the CAD is yours (or substantially modified), not
+        printed unchanged from a public STL. Cite the original
+        source~\cite{eezybotarm} but list the modifications you
+        made.
+  \item Print parameters: material, layer height, infill type \&
+        \%, supports.
+  \item Material justification: why PLA over PETG / ABS / nylon.
+  \item DFM iterations: what failed in the first print, what you
+        changed for the second.
+\end{itemize}
+A SolidWorks render and a photo of the printed parts mid-assembly
+both pick up easy marks.
+}
+
+\placeholder{[\ldots one paragraph on the design intent and the
+modifications made over the EEZYbotARM~\cite{eezybotarm} reference:
+e.g.\ redesigned base plate, custom potentiometer mounts, wider
+gripper opening, integrated cable channels\ldots]}
+
+% TODO FIGURE: SolidWorks isometric render
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Isometric CAD render of the arm assembly. Export from
+  SolidWorks as PDF or PNG.]}\vspace{4pt}}}
+  \caption{Isometric CAD render (placeholder).}
+  \label{fig:cadrender}
+\end{figure}
+
+\placeholder{[\ldots one paragraph on print parameters: PLA, layer
+height, infill, perimeters, supports. Explain material choice and
+mention the DFM tweaks made between iterations\ldots]}
+
+% TODO PHOTO: printed parts mid-assembly
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Photograph of the 3D-printed parts laid out on the bench
+  before assembly, or a half-assembled shot showing internal
+  structure.]}\vspace{4pt}}}
+  \caption{Printed parts (photo placeholder).}
+  \label{fig:printedparts}
+\end{figure}
+
+\subsection{Computer-vision subsystem}
+\label{sec:vision}
+\guide{
+Two-iteration narrative scores well in the 1st+ band because it
+demonstrates engineering judgement, not just first-attempt success.
+Structure:
+\begin{enumerate}
+  \item ESP32 first iteration: what worked (on-device HSV, UART link
+        to Mega, no Bluetooth contention), what failed (lighting
+        sensitivity, green/yellow boundary mis-classification).
+  \item Decision to migrate to a Pi + camera module: explain the
+        reasoning (more compute, larger frames, floating-point HSV,
+        classical CV pipeline).
+  \item Why the Mega side didn't change: same one-line ASCII
+        protocol, same UART pin --- isolation between vision and
+        motor control is preserved.
+\end{enumerate}
+This sub-section also evidences the Pi-vs-Arduino position from
+Section~\ref{sec:literature}: Pi is fine \emph{as a co-processor}
+but never owns real-time motor control.
+}
+
+\subsubsection{First iteration --- ESP32 WROVER CAM}
+\placeholder{[\ldots one paragraph on the ESP32 hardware (Freenove
+WROVER CAM, OV2640 sensor), the on-device HSV pipeline (QQVGA
+RGB565 $\rightarrow$ integer HSV $\rightarrow$ four colour bins with
+a 4\,\% noise floor), and the UART link
+(GPIO~17 $\rightarrow$ Mega pin~19, no level shift required).
+Mention initial successful classification.\ldots]}
+
+% TODO PHOTO: ESP32 + camera mounted on bench during testing
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Photograph of the ESP32 WROVER CAM during the first
+  iteration --- ideally with the laptop showing live colour
+  classification.]}\vspace{4pt}}}
+  \caption{ESP32 WROVER CAM during the first vision iteration
+  (photo placeholder).}
+  \label{fig:esp32cam}
+\end{figure}
+
+\placeholder{[\ldots one short paragraph on what failed: ambient
+lighting sensitivity, occasional false classifications at the
+green/yellow boundary, the 4\,\% noise-floor proving insufficient
+under fluorescent lighting\ldots]}
+
+\subsubsection{Second iteration --- Raspberry Pi camera module}
+\placeholder{[\ldots one paragraph on the Pi pipeline: CSI camera
+module, larger frame size, floating-point HSV conversion, classical
+CV (Gaussian blur $\rightarrow$ HSV thresholding $\rightarrow$
+contour-area filtering), and that the same ASCII protocol on the
+same Mega UART pin meant zero firmware changes on the arm
+side\ldots]}
+
+% TODO PHOTO: Pi + camera module mounted on arm
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Photograph of the Raspberry Pi + camera module during the
+  second iteration.]}\vspace{4pt}}}
+  \caption{Raspberry Pi + camera module (photo placeholder).}
+  \label{fig:picam}
+\end{figure}
+
+\placeholder{[\ldots closing paragraph reinforcing that all real-time
+motor control remains on the Mega; the Pi is a vision co-processor
+only. This preserves the embedded-systems character of the
+project.\ldots]}
+
+\corehit{Brief Objective~3 and the CAD/3D-printing rubric: original
+CAD modifications, FDM print parameters justified, fabrication
+performed in-house.}
+
+\advhit{[\ldots e.g.\ two iterations of an embedded computer-vision
+pipeline (on-device HSV on ESP32; classical CV on Pi); shared
+single-protocol UART link so the arm-side firmware is unchanged
+between iterations; multi-MCU heterogeneous architecture with clean
+separation of real-time and non-real-time concerns.\ldots]}

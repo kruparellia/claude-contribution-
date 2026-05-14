@@ -57,10 +57,10 @@ static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 // Keeping them grouped means we can pass one struct around instead of
 // three loose variables, and the compiler can inline the whole thing.
 struct Limits { uint8_t lo, hi, initial; };
-static constexpr Limits LIM_BASE     {  0, 180,  60 };
-static constexpr Limits LIM_SHOULDER { 30, 150,  60 };
-static constexpr Limits LIM_ELBOW    { 30, 150,  60 };
-static constexpr Limits LIM_CLAW     { 20, 160,  60 };
+static constexpr Limits LIM_BASE     {  0, 250,  80 };
+static constexpr Limits LIM_SHOULDER { 0, 250,  105 };
+static constexpr Limits LIM_ELBOW    { 0, 250,  110 };
+static constexpr Limits LIM_CLAW     { 0, 160,  90 };
 
 // Max angular speed per servo. 120 deg/s is comfortable for MG996R and
 // keeps current draw well below stall. Lower this if the battery sags.
@@ -119,8 +119,9 @@ AxisState axes[] = {
 };
 
 // Timestamps (milliseconds since boot, from millis()).
-uint32_t lastFrameMs = 0;   // when we last received a valid frame — fed the watchdog
-uint32_t lastTickMs  = 0;   // when we last ran the slew/write step
+uint32_t lastFrameMs  = 0;   // when we last received a valid frame — fed the watchdog
+uint32_t lastTickMs   = 0;   // when we last ran the slew/write step
+uint32_t lastPosLogMs = 0;   // when we last printed servo positions
 
 // ---- Camera state ---------------------------------------------------
 // `cam` is the public face of the camera link. Read-only from the rest
@@ -270,6 +271,17 @@ static void cameraPoll() {
     }
 }
 
+// Print current servo angles once per second. Visible in `pio device monitor`.
+static void logPositions() {
+    uint32_t now = millis();
+    if (now - lastPosLogMs < 1000) return;
+    lastPosLogMs = now;
+    Serial.print(F("[pos] base="));    Serial.print((int)(axes[0].current + 0.5f));
+    Serial.print(F(" shoulder="));     Serial.print((int)(axes[1].current + 0.5f));
+    Serial.print(F(" elbow="));        Serial.print((int)(axes[2].current + 0.5f));
+    Serial.print(F(" claw="));         Serial.println((int)(axes[3].current + 0.5f));
+}
+
 // Print camera state changes to USB-debug only (not on every frame),
 // so the monitor stays readable. Cheap to leave on in production.
 static void logCamChanges() {
@@ -340,6 +352,7 @@ void loop() {
     //     doesn't spam the USB monitor at the camera's frame rate.
     cameraPoll();
     logCamChanges();
+    logPositions();
 
     // ---- Sort-mode hook (autonomous mode) -------------------------------
     // When `cam.linkOk && cam.present`, branch on `cam.colour` to choose

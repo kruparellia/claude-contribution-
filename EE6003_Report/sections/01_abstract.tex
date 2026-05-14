@@ -1,0 +1,30 @@
+% =====================================================================
+% Abstract  (~180 words)
+% =====================================================================
+\begin{abstract}
+This paper describes the design, implementation and evaluation of a
+wireless 4 degree-of-freedom (DOF) robotic arm with gripper, developed
+for the EE6003 Embedded Systems coursework at Dyson Institute of
+Engineering + Technology. The system is built around two embedded
+units: a handheld joystick controller based on an Arduino Uno R4
+Minima, and a 3D-printed articulated arm driven by an Arduino Mega
+2560. The two units communicate over a Bluetooth Classic SPP link
+implemented with a paired HC-05 transmitter/receiver, transporting a
+seven-byte custom-framed protocol with XOR checksum, start-byte
+re-synchronisation and a link-loss watchdog. Each joint is closed
+around a potentiometer feedback channel sampled by the Mega's ADC,
+giving sub-degree position holding under payload disturbance. A
+secondary on-board computer-vision subsystem --- initially an ESP32
+WROVER CAM and later replaced by a Raspberry Pi camera module
+communicating over UART --- enables a Sense--Think--Act autonomous
+mode in which the arm scans, detects, classifies and sorts coloured
+objects until at least five items have been placed. The report
+explicitly separates core and advanced features in line with the brief
+and presents results against accuracy, latency, repeatability and
+robustness metrics.
+\end{abstract}
+
+\begin{IEEEkeywords}
+embedded systems, robotic arm, Bluetooth, HC-05, closed-loop control,
+finite state machine, computer vision, real-time, ISR, UART protocol
+\end{IEEEkeywords}

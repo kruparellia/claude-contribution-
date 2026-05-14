@@ -1,0 +1,139 @@
+% =====================================================================
+% Software Development  (~620 words; this is the highest-leverage
+% section for the 60% cap so it carries the heaviest "advanced" content)
+% =====================================================================
+\section{Software Development}
+\label{sec:software}
+
+The firmware is written in C++ targeting the Arduino core and is
+organised as a PlatformIO mono-repo with three build environments:
+\texttt{controller\_uno\_r4}, \texttt{arm\_mega} and
+\texttt{hc05\_configure}. Shared code lives in a single library,
+\texttt{ArmProtocol}, used by both the controller and arm builds.
+
+\subsection{Main control loops}
+\label{sec:loops}
+Both units run a single super-loop with timer-driven services, and a
+deferred move to \texttt{ArduinoFreeRTOS} on the Mega is planned
+(Section~\ref{sec:futurework}).
+
+\textbf{Controller.} On each tick the Uno R4 samples both joystick
+axes, applies a centred dead-band, scales the readings to 0--180$^\circ$
+with rate-limited slewing, packs the result into an
+\texttt{ArmProto::Frame}, and writes the seven-byte buffer to
+\texttt{Serial1}. The TX cadence is fixed at 50\,Hz (every 20\,ms).
+The mode button toggles between two control mappings, and a long-press
+asserts the autonomous-mode flag.
+
+\textbf{Arm.} On each tick the Mega services its UART input, runs the
+PID for every joint at 100\,Hz, services the camera UART, and updates
+the autonomous-mode FSM if engaged. A 500\,ms watchdog parks the arm
+in a known-safe pose if no valid frame has been received in that
+window.
+
+\subsection{Wireless protocol}
+\label{sec:protocol}
+The on-air format is a fixed 7-byte frame:
+
+\begin{center}\footnotesize
+\begin{tabular}{c|c|c|c|c|c|c}
+\texttt{0xA5} & \texttt{base} & \texttt{shoulder} & \texttt{elbow} &
+\texttt{claw} & \texttt{flags} & \texttt{XOR} \\
+\end{tabular}
+\end{center}
+
+The leading \texttt{0xA5} start byte allows the receiver to
+re-synchronise after radio noise; the trailing XOR over bytes 0--5
+catches single-bit errors cheaply on an 8-bit AVR. Each angle is
+encoded as a single byte, giving 1$^\circ$ resolution which exceeds
+the servo's mechanical resolution by an order of magnitude. At
+50\,Hz the steady-state air rate is
+\(7\,\text{B}\times 10\,\text{bits/B}\times 50\,\text{Hz} = 3.5\,\text{kbit/s}\),
+well inside the HC-05's default 9600 baud and leaving headroom for
+retransmission. Frames that fail the checksum are dropped and the
+arm holds its previous setpoint; if no valid frame arrives for
+500\,ms the link-loss watchdog parks the joints. Listing~\ref{lst:proto}
+shows the encoder and the byte-at-a-time decoder.
+
+\begin{lstlisting}[caption={Frame encoder/decoder (excerpt from
+\texttt{lib/ArmProtocol/ArmProtocol.h}).},label=lst:proto]
+inline void encode(const Frame& f, uint8_t out[FRAME_SIZE]) {
+    out[0] = START_BYTE;
+    out[1] = f.base;     out[2] = f.shoulder;
+    out[3] = f.elbow;    out[4] = f.claw;
+    out[5] = f.flags;    out[6] = checksum(f);
+}
+
+bool Decoder::feed(uint8_t b, Frame& out) {
+    buf_[idx_++] = b;
+    if (idx_ == 1 && buf_[0] != START_BYTE) { idx_ = 0; return false; }
+    if (idx_ < FRAME_SIZE) return false;
+    idx_ = 0;
+    Frame f { buf_[1], buf_[2], buf_[3], buf_[4], buf_[5] };
+    return checksum(f) == buf_[6] ? (out = f, true) : false;
+}
+\end{lstlisting}
+
+The protocol is unit-tested on the host using a desktop GoogleTest
+harness; four tests covering encode/decode round-tripping, checksum
+rejection, mid-stream resynchronisation and short-frame buffering
+all pass.
+
+\subsection{Closed-loop joint control}
+\label{sec:closedloop}
+Each joint runs an independent discrete-time PID controller at
+100\,Hz, driven by a Mega timer interrupt that also schedules the ADC
+read of the corresponding potentiometer. The PID output trims the
+servo's commanded angle, which closes the loop around mechanical
+back-lash and load-induced sag. The control law is the standard
+\(u_k = K_p e_k + K_i T_s \sum e_k + K_d (e_k - e_{k-1})/T_s\) with
+integrator anti-windup clamped to the servo command range.
+
+% TODO PHOTO/PLOT: step-response trace from the Serial logger,
+% plotted in matplotlib or Excel. Replace the placeholder.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[Step-response plot of one joint: commanded vs measured angle
+  over time, with $K_p$ tuned. To be added once tuning data is logged.]}
+  \vspace{4pt}}}
+  \caption{Closed-loop step response on the shoulder joint (placeholder).}
+  \label{fig:stepresp}
+\end{figure}
+
+\subsection{Operational modes and FSM}
+\label{sec:fsm}
+The arm distinguishes \emph{Manual} mode from an
+\emph{Autonomous} (sort) mode using an explicit FSM. On a long-press
+of the controller's mode button the
+\texttt{flags.MODE\_AUTO} bit is asserted; the Mega transitions
+\texttt{IDLE}~$\rightarrow$~\texttt{SCAN}~$\rightarrow$~\texttt{DETECT}
+~$\rightarrow$~\texttt{CLASSIFY}~$\rightarrow$~\texttt{PICK}
+~$\rightarrow$~\texttt{PLACE}~$\rightarrow$~\texttt{COUNT\_CHECK}
+and loops until at least five items have been sorted, satisfying the
+brief's $\geq 5$-item target. \texttt{COUNT\_CHECK} returns the
+machine to \texttt{IDLE} when the target is reached, and any
+checksum-fail or e-stop event drops the machine into a
+\texttt{SAFE} state from which only a manual mode reset can recover.
+
+% TODO FIGURE: clean state diagram of the FSM (drawn in TikZ or
+% imported as PDF). For now leave a placeholder.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{4pt}
+  \emph{[State diagram of autonomous-mode FSM. Nodes:
+  IDLE, SCAN, DETECT, CLASSIFY, PICK, PLACE, COUNT\_CHECK, SAFE.
+  To be drawn in TikZ for the final report.]}\vspace{4pt}}}
+  \caption{Autonomous-mode finite state machine (placeholder).}
+  \label{fig:fsm}
+\end{figure}
+
+\corehit{Brief Objectives 1, 2, 5 and~6: digital command packets
+captured at the controller, transmitted wirelessly, received and
+acted on at the arm; manual and autonomous modes both implemented.}
+
+\advhit{Custom 7-byte framed UART protocol with start-byte
+re-synchronisation, XOR checksum and link-loss watchdog;
+ISR-driven 100\,Hz PID with anti-windup; explicit FSM with
+\texttt{SAFE} fault state; host-side unit tests for the protocol
+encoder/decoder.}

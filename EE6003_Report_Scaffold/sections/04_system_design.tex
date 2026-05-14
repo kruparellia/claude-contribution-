@@ -1,0 +1,96 @@
+% =====================================================================
+% Embedded System Design and Architecture  --  TARGET: ~500 words
+% Marking weight: 10 marks. Brief asks for: comprehensive block
+% diagram, MCU justification, wireless choice, power management,
+% mode-control flow.
+% =====================================================================
+\section{Embedded System Design and Architecture}
+\label{sec:design}
+
+\guide{
+The 1st+ rubric here wants ``exceptional system design, clear
+justifications, well-optimised architecture, strong technical
+depth.'' Five sub-sections, in this order, each landing one bullet
+of the brief:
+\begin{enumerate}
+  \item \textbf{Overall architecture} -- block diagram + a paragraph
+        walking through it.
+  \item \textbf{Microcontroller selection} -- a comparison table
+        (Mega vs Uno R4 vs Pi at minimum) and a paragraph explaining
+        the choice.
+  \item \textbf{Wireless link justification} -- 1 paragraph; reference
+        Section~\ref{sec:literature}.
+  \item \textbf{Power architecture} -- include the existing power
+        diagram (Fig.~\ref{fig:power}); mention split rails, common
+        ground.
+  \item \textbf{Mode-control flow} -- 1 paragraph; forward-reference
+        the FSM in Section~\ref{sec:fsm}.
+\end{enumerate}
+End the section with the \texttt{\textbackslash corehit} and
+\texttt{\textbackslash advhit} lines.
+}
+
+\subsection{Overall architecture}
+\placeholder{[\ldots one paragraph describing the two-unit system:
+Controller (Uno R4 + 2 joysticks + HC-05 master) $\rightarrow$
+HC-05 link $\rightarrow$ Arm (Mega 2560 + HC-05 slave + 4 servos +
+4 potentiometers) plus a vision co-processor on a separate UART\ldots]}
+
+% TODO FIGURE: replace this placeholder with the system block diagram.
+% You can draw it in TikZ, Lucid, draw.io etc. and export to PDF.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.92\columnwidth}{\centering\vspace{8pt}
+    \emph{[Block diagram of overall system architecture. Show
+    Controller, wireless link, Arm, joints, gripper, vision
+    co-processor, power domains. Replace this placeholder.]}\vspace{8pt}}}
+  \caption{System block diagram (placeholder).}
+  \label{fig:blockdiagram}
+\end{figure}
+
+\subsection{Microcontroller selection}
+\guide{Table format works best here. Include at minimum: Mega 2560,
+Uno R4 Minima, Raspberry Pi 4. Compare core, clock, hardware UARTs,
+ADC, real-time determinism, idle power. Conclude with one or two
+sentences saying what was chosen for each unit and why.}
+
+\placeholder{[\ldots one paragraph + comparison table\ldots]}
+
+\subsection{Wireless link justification}
+\placeholder{[\ldots one paragraph referencing
+Section~\ref{sec:literature}, summarising the rejection of BLE,
+Zigbee, Wi-Fi, nRF24, and explaining why Bluetooth Classic SPP is
+appropriate here\ldots]}
+
+\subsection{Power architecture}
+\placeholder{[\ldots one paragraph describing the split-rail design:
+USB / 9\,V supply for the Mega via its on-board regulator, separate
+6\,V battery for the four servos, common ground reference, decoupling
+capacitors at each servo. Mention that the servo rail is never
+connected to the Mega's $V_{in}$\ldots]}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{01_power_architecture.pdf}
+  \caption{Power architecture. Logic and motor rails are separated;
+  grounds are common.}
+  \label{fig:power}
+\end{figure}
+
+\subsection{Mode-control flow}
+\placeholder{[\ldots one paragraph describing how the system
+transitions between Manual mode and Autonomous (sort) mode: long-press
+of the controller's mode button, the resulting flag bit propagated in
+each frame, and the FSM that takes over on the arm side.
+Forward-reference Section~\ref{sec:fsm}\ldots]}
+
+\corehit{Brief Objective~1 (two embedded units), Objective~2 (wireless
+link), Objective~3 (3+\,DOF arm), Objective~5 (independent and
+coordinated joint control), and the architecture-rubric requirement
+for a comprehensive block diagram with justified hardware choices.}
+
+\advhit{[\ldots e.g.\ multi-MCU heterogeneous architecture (Mega for
+real-time control + companion vision processor); justified protocol
+choice backed by literature comparison; segregated power architecture
+with explicit grounding strategy. Edit to match what your team
+actually demonstrates.]}

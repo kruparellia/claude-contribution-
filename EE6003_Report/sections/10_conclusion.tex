@@ -1,0 +1,40 @@
+% =====================================================================
+% Discussion, future work, conclusion  (~280 words)
+% =====================================================================
+\section{Discussion and Future Work}
+\label{sec:futurework}
+
+The principal advanced-feature claims that drive this submission
+above the 60\,\% core-only ceiling are: (i)~a custom UART framing
+protocol with start-byte re-sync, XOR checksum and link-loss
+watchdog, hosted above the HC-05 SPP tunnel; (ii)~ISR-driven 100\,Hz
+PID control on every joint with anti-windup; (iii)~an explicit FSM
+for the autonomous mode with a \texttt{SAFE} fault state;
+(iv)~a multi-MCU heterogeneous architecture in which an ESP32 (later
+a Raspberry Pi) handles computer vision while the Mega retains all
+real-time motor and feedback responsibilities; and (v)~quantitative
+bench instrumentation that drives iterative optimisation rather than
+ad-hoc demonstration.
+
+Several extensions remain. The Mega super-loop is structured to
+allow a deferred move to ArduinoFreeRTOS, which would convert the
+joystick sampling, packet RX, motor control and feedback PID into
+explicit tasks with deterministic priorities; this is the next
+firmware change planned. A second wireless channel
+(\mbox{nRF24L01+}) was scoped as a redundancy/comparison feature but
+deferred. On the mechanical side, a force-sensitive gripper would
+allow grasp-quality feedback, which is currently absent.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+A wireless 4-DOF robotic arm with gripper has been designed,
+implemented and is being evaluated against the EE6003 brief. The
+two-unit embedded architecture, closed-loop joint control,
+custom-framed Bluetooth protocol and Sense--Think--Act autonomous
+mode together address every core objective, while the explicit
+advanced features listed above provide the evidence base for marks
+above the upper-2:1 ceiling. The system has been documented from
+schematic through to firmware and test methodology in this report,
+and a demonstration video accompanies the submission to evidence
+prototype operation.

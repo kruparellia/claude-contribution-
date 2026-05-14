@@ -1,0 +1,117 @@
+% =====================================================================
+% Hardware Implementation  (~430 words; physical-build sub-sections
+% intentionally light per author note)
+% =====================================================================
+\section{Hardware Implementation}
+\label{sec:hardware}
+
+\subsection{Bill of materials and physical assembly}
+The arm is mechanically based on the EEZYbotARM family of 3D-printed
+designs, with original modifications detailed in
+Section~\ref{sec:cad}. The principal electronic components are
+listed in Section~\ref{sec:design}; the controller carries two KY-023
+analogue joysticks, a momentary mode-switch button and an HC-05
+master radio.
+
+% TODO PHOTO: assembled arm on the bench, ideally with cabling tidy
+% and the camera module visible mounted to the base. Replace the
+% placeholder text inside the figure with \includegraphics{arm_photo}.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.92\columnwidth}{\centering\vspace{4pt}
+    \emph{[Photograph of the assembled arm on the bench, cabling
+    visible. To be added once final assembly is complete.]}\vspace{4pt}}}
+  \caption{Assembled arm prototype. Power and signal cabling are
+  separated; the gripper end-effector is visible at upper right.}
+  \label{fig:armphoto}
+\end{figure}
+
+% Physical-build write-up to be filled in by group member responsible
+% for assembly. Topics to cover (placeholders below):
+% - frame assembly steps and torque values
+% - servo mounting and offset calibration
+% - cable routing and strain relief
+% - end-stop verification and physical limits
+\subsubsection*{Mechanical assembly (placeholder)}
+\emph{This subsection is intentionally short in the first draft and
+will be expanded by the group member responsible for the physical
+build. Topics to cover include the assembly sequence, torque values
+used on the servo horns, cable routing and strain relief, and the
+mechanical end-stop verification procedure.}
+
+\subsection{Sensor interfacing}
+\label{sec:sensors}
+\textbf{Joystick axes.} Each KY-023 is a centred-detent potentiometer
+network with 0--3.3\,V output. The Uno R4's 12-bit ADC samples each
+axis at $\geq$200\,Hz and applies a small dead-band to suppress
+quiescent jitter. The mode-switch button is debounced in firmware
+with a 20\,ms window.
+
+\textbf{Joint potentiometers.} Each of the four joints carries a
+10\,k$\Omega$ linear potentiometer, geared (or directly coupled) to
+the joint axis to provide an absolute position reading. The wiper
+voltage is RC-filtered ($R$=1\,k$\Omega$, $C$=100\,nF, 1.6\,kHz cut)
+and read by the Mega's 10-bit ADC at 100\,Hz under timer interrupt.
+A 16-sample boxcar average removes residual servo-induced noise
+without compromising the closed-loop bandwidth.
+
+\textbf{IR proximity (autonomous mode).} A short-range IR module on
+a digital input gates the
+\texttt{DETECT} state of the autonomous FSM (Section~\ref{sec:fsm}).
+
+\subsection{Wiring schematics}
+The full wiring of each unit is shown in
+Figs.~\ref{fig:armwiring} and~\ref{fig:ctrlwiring}. The
+controller-side HC-05 is voltage-divided on its RX line so that the
+Uno's 5\,V TX presents approximately 3.3\,V to the radio
+(Fig.~\ref{fig:hc05div}); the same divider is reproduced on the arm
+side.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{03_arm_wiring.pdf}
+  \caption{Arm-side wiring. The Mega 2560 drives four servos from a
+  separate 6\,V rail; the HC-05 slave is on Serial1.}
+  \label{fig:armwiring}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{04_controller_wiring.pdf}
+  \caption{Controller-side wiring. Two KY-023 joysticks and a mode
+  button feed the Uno R4 Minima; the HC-05 master is on Serial1.}
+  \label{fig:ctrlwiring}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.65\columnwidth]{02_hc05_voltage_divider.pdf}
+  \caption{HC-05 RX voltage divider.}
+  \label{fig:hc05div}
+\end{figure}
+
+\subsection{Power and protection}
+The split-rail power architecture is shown in Fig.~\ref{fig:power}.
+A common ground reference is established at the Mega; servo $V_{cc}$
+is decoupled with a 470\,$\mu$F bulk capacitor at the rail and
+100\,nF ceramics at each servo. An e-stop button on the controller
+asserts an emergency-stop flag in the next outgoing frame, which the
+arm interprets by parking the joints in a safe pose.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{01_power_architecture.pdf}
+  \caption{Power architecture. Logic and motor rails are separated;
+  grounds are common. The arm's mains rail is never connected to the
+  Mega's $V_{in}$.}
+  \label{fig:power}
+\end{figure}
+
+\corehit{Hardware brief Objectives 1, 3 and~5: hardware components
+assembled, sensors interfaced, motor control wired up; circuit
+schematics for both transmitter and receiver provided.}
+
+\advhit{Analogue-front-end design (RC filter $+$ digital averaging
+on potentiometers); split-rail power architecture with documented
+grounding strategy; voltage-level translation on the HC-05 RX line;
+hardware e-stop wired through firmware to a fail-safe pose.}

@@ -1,0 +1,100 @@
+% =====================================================================
+% Embedded System Design & Architecture  (~430 words)
+% =====================================================================
+\section{Embedded System Design and Architecture}
+\label{sec:design}
+
+\subsection{Overall architecture}
+The system is partitioned into two embedded units linked over a
+wireless command channel, plus a third on-board processor dedicated
+to computer vision (Fig.~\ref{fig:blockdiagram}). The
+\emph{Controller} (Arduino Uno R4 Minima) reads two analogue
+joysticks, packs the four resulting axes plus a button-state flag
+into a custom 7-byte frame, and transmits the frame over an HC-05
+master at 50\,Hz. The \emph{Arm} (Arduino Mega 2560) hosts an HC-05
+slave on a hardware UART, decodes the frame, applies per-joint PID
+control using potentiometer feedback, and drives four servos
+(three~MG996R for base/shoulder/elbow and one~SG90 for the gripper).
+A wired UART link from the vision subsystem feeds the autonomous-mode
+state machine running on the Mega.
+
+% TODO PHOTO: top-down photo of the assembled controller + arm side
+% by side, ideally with the camera module and a couple of coloured
+% blocks visible. Replace the placeholder below.
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.92\columnwidth}{\centering
+    \vspace{8pt}
+    \emph{[Block diagram of overall system architecture --- to be drawn from
+    the existing diagrams in \texttt{pio-project/diagrams/}.
+    Should show: Controller (Uno R4 + 2 joysticks) $\rightarrow$
+    HC-05 link $\rightarrow$ Arm (Mega 2560) $\rightarrow$
+    4 servos with potentiometer feedback, plus the camera
+    co-processor on Serial1.]}
+    \vspace{8pt}
+  }}
+  \caption{System block diagram. Two embedded units communicate over
+  Bluetooth Classic SPP; a third co-processor handles computer vision
+  and reports object colour over UART.}
+  \label{fig:blockdiagram}
+\end{figure}
+
+\subsection{Microcontroller selection}
+Table~\ref{tab:mcucompare} summarises the candidates considered. The
+Mega 2560 was selected for the arm because it provides the four
+hardware UARTs (one for HC-05, one for the camera, plus debug),
+sixteen ADC channels (one per potentiometer with headroom for IR and
+load-cell extensions), 8\,KB of SRAM, and 54 digital I/O pins. The
+controller side has substantially lighter requirements; the Uno R4
+Minima was selected for its 12-bit ADC and Cortex-M4 core, which
+gives noise headroom on the joystick axes without saturating the
+HC-05 baud budget.
+
+\begin{table}[t]
+  \centering
+  \caption{Microcontroller comparison.}
+  \label{tab:mcucompare}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{lXXX}
+    \toprule
+    & \textbf{Mega 2560} & \textbf{Uno R4 Minima} & \textbf{Raspberry Pi 4} \\
+    \midrule
+    Core      & ATmega2560 (8-bit) & Renesas RA4M1 (32-bit) & Cortex-A72 (Linux) \\
+    Clock     & 16\,MHz            & 48\,MHz                 & 1.5\,GHz \\
+    HW UARTs  & 4                  & 1 (+USB-CDC)            & 1 (with overlay) \\
+    ADC       & 10-bit, 16 ch      & 12-bit                  & none (native) \\
+    Real-time & deterministic      & deterministic           & non-deterministic \\
+    Idle power& $\sim$50\,mA       & $\sim$30\,mA            & $\geq$500\,mA \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Wireless link justification}
+HC-05 modules implementing Bluetooth Classic SPP were chosen over BLE,
+Zigbee, Wi-Fi and proprietary GFSK options for two reasons. First,
+Bluetooth Classic's adaptive frequency hopping copes well with the
+2.4\,GHz congestion typical of an industrial cell or a busy lab
+bench. Second, the SPP profile maps cleanly to the Mega's UART, so
+the radio is effectively transparent to firmware --- this lets the
+``advanced'' work concentrate on protocol design \emph{above} the
+radio rather than on stack integration. Section~\ref{sec:protocol}
+presents the framing.
+
+\subsection{Power architecture}
+Servo current spikes and microcontroller logic must be electrically
+separated to avoid noise-induced resets. The arm therefore uses two
+power domains (Fig.~\ref{fig:power}): the Mega is powered from USB
+or a 9\,V supply via its on-board regulator, while the four servos
+share a separate 6\,V battery rail. The two rails share a common
+ground but never share~+V. The controller is powered from a 4$\times$AA
+pack feeding the Uno R4's USB-C port through a small buck module.
+
+\corehit{Brief Objective~1 (two embedded units), Objective~2 (wireless
+link), Objective~3 (3+\,DOF arm), Objective~5 (independent and
+coordinated joint control), and the architecture-rubric requirement
+for a comprehensive block diagram with justified hardware choices.}
+
+\advhit{Multi-MCU heterogeneous architecture (Mega for real-time
+control + companion vision processor); justified protocol choice
+backed by a literature comparison; segregated power architecture
+with explicit grounding strategy.}

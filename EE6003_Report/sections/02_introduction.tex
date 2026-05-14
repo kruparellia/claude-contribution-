@@ -1,0 +1,46 @@
+% =====================================================================
+% Introduction  (~320 words)
+% =====================================================================
+\section{Introduction}
+\label{sec:introduction}
+
+Industrial robots have become a fixture of modern manufacturing.
+Worldwide annual shipments of industrial manipulators have exceeded
+half a million units every year since 2021, with a global operational
+stock above 3.5\,million~\cite{ifr2024}. Articulated arms with three
+to seven revolute joints dominate the installed base because their
+workspace flexibility is well-suited to pick-and-place, assembly and
+machine tending~\cite{siciliano2009}. Increasingly these tasks are
+operated remotely or autonomously, particularly in hazardous,
+hygienic, or space-constrained settings where co-locating an operator
+with the manipulator is undesirable.
+
+The coursework brief~\cite{ee6003brief} reflects this trend by
+requiring a two-unit embedded architecture: a handheld controller
+(transmitter) that maps operator input to digital command packets, and
+a robotic arm (receiver) of at least three DOF plus gripper that
+executes those packets in real time and additionally supports a
+fully autonomous \emph{Sense--Think--Act} sort task. The brief
+mandates closed-loop joint feedback, a wireless link, mode switching
+between manual and autonomous control, and explicit
+performance evaluation against accuracy, latency, repeatability and
+robustness metrics.
+
+This report documents the group's design and implementation against
+those requirements. Section~\ref{sec:literature} surveys the relevant
+literature on industrial manipulators, low-power wireless protocols
+and closed-loop control. Section~\ref{sec:design} presents the system
+architecture and justifies the principal hardware choices.
+Sections~\ref{sec:hardware} and~\ref{sec:software} document the
+hardware and firmware respectively, including the custom packet
+protocol, the per-joint PID, the autonomous-mode finite state machine
+(FSM), and the computer-vision subsystem. Section~\ref{sec:cad}
+covers the mechanical design and 3D printing.
+Section~\ref{sec:testing} describes the test methodology and
+results. Section~\ref{sec:teamwork} captures team organisation and
+individual contributions, and Section~\ref{sec:conclusion} concludes.
+
+In line with the brief, every technical section explicitly identifies
+which work satisfies a \emph{core} requirement (capped at 60\,\%) and
+which constitutes an \emph{advanced} embedded-systems feature
+contributing to marks above that ceiling.

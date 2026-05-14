@@ -1,0 +1,35 @@
+% =====================================================================
+% Abstract  --  TARGET: ~200 words
+% =====================================================================
+\begin{abstract}
+\guide{
+A 1st-class abstract does five things, in this order:
+\begin{itemize}
+  \item One sentence stating the problem domain (industrial wireless
+        teleoperation + autonomous sort).
+  \item One sentence on the system overview: two embedded units, 4-DOF
+        arm + gripper, wireless link, closed-loop feedback, vision-driven
+        autonomous mode.
+  \item Two to three sentences on the core technical choices: Arduino
+        Mega 2560 + Uno R4 Minima, HC-05 Bluetooth Classic SPP, MG996R
+        servos, potentiometer feedback, ESP32/Pi computer-vision
+        co-processor.
+  \item One sentence on the principal advanced features (custom UART
+        protocol, ISR-driven PID, FSM-based autonomous mode,
+        heterogeneous multi-MCU architecture).
+  \item One sentence on results headline (accuracy / latency /
+        repeatability numbers, once known).
+\end{itemize}
+Keep it dense; do not use first person.
+}
+
+\placeholder{This paper describes the design, implementation and
+evaluation of a wireless 4-DOF robotic arm with gripper for the EE6003
+Embedded Systems coursework. [\ldots replace this paragraph with the
+group's own abstract following the guide above\ldots]}
+\end{abstract}
+
+\begin{IEEEkeywords}
+embedded systems, robotic arm, Bluetooth, HC-05, closed-loop control,
+finite state machine, computer vision, real-time, ISR, UART protocol
+\end{IEEEkeywords}
