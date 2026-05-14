@@ -1,0 +1,8 @@
+# vision/requirements.txt
+# OpenCV 4.10.0 is already installed as the system 'opencv' package on this Pi — no reinstall needed.
+# If setting up on a fresh machine:
+#   pip install opencv-python>=4.10.0 numpy>=1.26.0
+#
+# numpy is also already present at /usr/lib/python3/dist-packages (2.2.4).
+opencv-python>=4.10.0
+numpy>=1.26.0
