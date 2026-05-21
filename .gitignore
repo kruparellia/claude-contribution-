@@ -7,3 +7,6 @@ pio-project/.vscode/
 
 # Windows
 Thumbs.db
+
+# Python cache
+vision/__pycache__
