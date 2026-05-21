@@ -42,7 +42,7 @@
 // through the file. (`static constexpr uint8_t` = compile-time constant,
 // 1 byte, file-local — the C++ way to say "#define a small integer".)
 static constexpr uint8_t SERVO_PIN_BASE     = 9;
-static constexpr uint8_t SERVO_PIN_SHOULDER = 10;
+static constexpr uint8_t SERVO_PIN_SHOULDER = 7;
 static constexpr uint8_t SERVO_PIN_ELBOW    = 11;
 static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 
@@ -57,10 +57,10 @@ static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 // Keeping them grouped means we can pass one struct around instead of
 // three loose variables, and the compiler can inline the whole thing.
 struct Limits { uint8_t lo, hi, initial; };
-static constexpr Limits LIM_BASE     {  0, 250,  80 };
-static constexpr Limits LIM_SHOULDER { 0, 250,  105 };
-static constexpr Limits LIM_ELBOW    { 0, 250,  110 };
-static constexpr Limits LIM_CLAW     { 0, 160,  90 };
+static constexpr Limits LIM_BASE     {  0, 180,  80 };
+static constexpr Limits LIM_SHOULDER { 30, 140,  105 };
+static constexpr Limits LIM_ELBOW    { 30, 150,  110 };
+static constexpr Limits LIM_CLAW     { 20, 160,  90 };
 
 // Max angular speed per servo. 120 deg/s is comfortable for MG996R and
 // keeps current draw well below stall. Lower this if the battery sags.

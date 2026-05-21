@@ -81,7 +81,7 @@ static constexpr Pose HOME { 90, 90, 90, 90 };
 // safe range, even if the user holds the stick all the way over.
 struct Lim { uint8_t lo, hi; };
 static constexpr Lim L_BASE     {   0, 180 };
-static constexpr Lim L_SHOULDER {  30, 150 };
+static constexpr Lim L_SHOULDER {  0, 150 };
 static constexpr Lim L_ELBOW    {  30, 150 };
 static constexpr Lim L_CLAW     {  20, 160 };
 

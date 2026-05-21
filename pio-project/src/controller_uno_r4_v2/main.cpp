@@ -90,9 +90,9 @@ static constexpr Pose HOME { 80, 105, 110, 90 };
 
 // Per-axis travel limits (defence in depth — arm side clamps too).
 struct Lim { uint8_t lo, hi; };
-static constexpr Lim L_BASE     {   0, 250 };
-static constexpr Lim L_SHOULDER {  0, 250 };
-static constexpr Lim L_ELBOW    {  0, 200 };
+static constexpr Lim L_BASE     {   0, 180 };
+static constexpr Lim L_SHOULDER {  30, 140 };
+static constexpr Lim L_ELBOW    {  30, 150 };
 static constexpr Lim L_CLAW     {  20, 160 };
 
 // Tx cadence (50 Hz to the arm, identical to original firmware).
