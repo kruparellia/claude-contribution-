@@ -7,18 +7,15 @@
 //      on Serial1 at 9600 baud.
 //   2. Rate-limit commanded angles into smooth servo motion (slew).
 //   3. Fail-safe: if no valid frame for LINK_TIMEOUT_MS, freeze in place.
-//   4. Receive colour-detection messages from the ESP32-WROVER CAM on
-//      Serial2 at 115200 baud. The latest detection is exposed in `cam`
-//      so sort-mode logic can branch on it. The camera path is purely
-//      additive — if the ESP32 is unplugged, the arm still works.
+//
+// Vision lives on the Raspberry Pi side now (Logitech C270 + OpenCV in
+// vision/colour_detect.py). The Mega has no on-board camera link.
 //
 // Wiring (Mega):
 //   HC-05  VCC  -> 5V
 //   HC-05  GND  -> GND
 //   HC-05  TXD  -> Mega D19  (RX1)           [HC-05 TX is 3.3V-ish, Mega accepts]
 //   HC-05  RXD  -> Mega D18  (TX1) via divider (see wiring guide)
-//   ESP32  TX2  -> Mega D17  (RX2)           [ESP32 GPIO17, 3.3V, Mega accepts]
-//   ESP32  GND  -> Mega GND  (shared ground required)
 //   Servos     : see SERVO_PIN_* below. Power from external 4xAA pack,
 //                NOT from the Mega's 5V rail. Share GND with the Mega.
 //
@@ -106,14 +103,6 @@ static constexpr uint8_t  SEQ_HOME_TOL_DEG  = 5;
 // the threshold can't be tripped by accumulated rounding.
 static constexpr uint8_t  SEQ_OVERRIDE_DEG  = 2;
 
-// ---- Camera link constants -----------------------------------------
-// Baud must match LINK_BAUD in esp32_color_detect.ino.
-static constexpr uint32_t CAM_BAUD       = 115200;
-// If we don't hear from the ESP32 for this long, the link is considered
-// dead and `cam.linkOk` falls back to false. Independent of the HC-05
-// watchdog above — the camera dropping out must not freeze the arm.
-static constexpr uint32_t CAM_TIMEOUT_MS = 1000;
-
 // ---- State ----------------------------------------------------------
 // Four Servo objects, one per joint. `Servo` is a class from <Servo.h>;
 // declaring an object here reserves a slot in the library's internal
@@ -150,30 +139,6 @@ AxisState axes[] = {
 uint32_t lastFrameMs  = 0;   // when we last received a valid frame — fed the watchdog
 uint32_t lastTickMs   = 0;   // when we last ran the slew/write step
 uint32_t lastPosLogMs = 0;   // when we last printed servo positions
-
-// ---- Camera state ---------------------------------------------------
-// `cam` is the public face of the camera link. Read-only from the rest
-// of the sketch's point of view — only cameraPoll() updates it.
-//
-// Use `cam.linkOk` to know whether the ESP32 is alive at all, then
-// `cam.present` and `cam.colour` to drive sort-mode behaviour.
-enum CamColour : uint8_t {
-    CAM_NONE = 0, CAM_RED, CAM_GREEN, CAM_BLUE, CAM_YELLOW
-};
-
-struct CameraState {
-    bool      present   = false;     // is a coloured object in frame?
-    CamColour colour    = CAM_NONE;  // which colour, if present
-    uint8_t   pct       = 0;         // % of frame covered by the colour
-    uint32_t  lastMsgMs = 0;         // millis() of the last good message
-    bool      linkOk    = false;     // false if no message seen recently
-};
-CameraState cam;
-
-// Line buffer for the Serial2 parser. 64 bytes is plenty for the
-// `CAM,1,YELLOW,42` style messages we expect (longest is ~20 chars).
-static char    camRxBuf[64];
-static uint8_t camRxLen = 0;
 
 // ---------------------------------------------------------------------
 // Squash a value into the [lo, hi] range. `inline` hints the compiler to
@@ -369,92 +334,6 @@ static void slewAndWrite(uint32_t dtMs) {
     }
 }
 
-// ---------------------------------------------------------------------
-// Camera-link helpers
-//
-// Wire format (one ASCII line per frame, '\n' terminated):
-//   CAM,<state>,<colour>,<pct>
-//     state  = 0 (no object) | 1 (object present)
-//     colour = NONE | RED | GREEN | BLUE | YELLOW
-//     pct    = 0..100, percent of frame matching the dominant colour
-//
-// Parsing is one byte at a time so a half-arrived line never blocks
-// the main loop.
-// ---------------------------------------------------------------------
-static CamColour parseCamColour(const char* s) {
-    if (!strcmp(s, "RED"))    return CAM_RED;
-    if (!strcmp(s, "GREEN"))  return CAM_GREEN;
-    if (!strcmp(s, "BLUE"))   return CAM_BLUE;
-    if (!strcmp(s, "YELLOW")) return CAM_YELLOW;
-    return CAM_NONE;
-}
-
-static const char* camColourName(CamColour c) {
-    switch (c) {
-        case CAM_RED:    return "RED";
-        case CAM_GREEN:  return "GREEN";
-        case CAM_BLUE:   return "BLUE";
-        case CAM_YELLOW: return "YELLOW";
-        default:         return "NONE";
-    }
-}
-
-// Parse one complete `CAM,...` line and update `cam`. Returns true on
-// success. Any malformed line is silently dropped — we'll just resync
-// at the next newline.
-static bool handleCamLine(char* line) {
-    if (strncmp(line, "CAM,", 4) != 0) return false;
-    char* p          = line + 4;
-    char* stateStr   = strtok(p,    ",");
-    char* colourStr  = strtok(NULL, ",");
-    char* pctStr     = strtok(NULL, ",");
-    if (!stateStr || !colourStr || !pctStr) return false;
-
-    int state = atoi(stateStr);
-    int pct   = atoi(pctStr);
-    if (pct < 0)   pct = 0;
-    if (pct > 100) pct = 100;
-
-    cam.present   = (state != 0);
-    cam.colour    = cam.present ? parseCamColour(colourStr) : CAM_NONE;
-    cam.pct       = (uint8_t)pct;
-    cam.lastMsgMs = millis();
-    cam.linkOk    = true;
-    return true;
-}
-
-static void cameraSetup() {
-    Serial2.begin(CAM_BAUD);
-    camRxLen = 0;
-}
-
-// Drain Serial2's RX buffer non-blockingly. Call once per loop().
-static void cameraPoll() {
-    while (Serial2.available()) {
-        char c = (char)Serial2.read();
-        if (c == '\r') continue;
-        if (c == '\n') {
-            camRxBuf[camRxLen] = '\0';
-            if (camRxLen > 0) handleCamLine(camRxBuf);
-            camRxLen = 0;
-        } else if (camRxLen < sizeof(camRxBuf) - 1) {
-            camRxBuf[camRxLen++] = c;
-        } else {
-            // Overflow — drop and resync at next newline.
-            camRxLen = 0;
-        }
-    }
-
-    // Camera watchdog. Independent of the HC-05 watchdog: a dead camera
-    // must NOT cause the arm to freeze, only to forget the last detection.
-    if (cam.linkOk && (millis() - cam.lastMsgMs) > CAM_TIMEOUT_MS) {
-        cam.linkOk  = false;
-        cam.present = false;
-        cam.colour  = CAM_NONE;
-        cam.pct     = 0;
-    }
-}
-
 // Print current servo angles once per second. Visible in `pio device monitor`.
 static void logPositions() {
     uint32_t now = millis();
@@ -466,30 +345,6 @@ static void logPositions() {
     Serial.print(F(" claw="));         Serial.println((int)(axes[3].current + 0.5f));
 }
 
-// Print camera state changes to USB-debug only (not on every frame),
-// so the monitor stays readable. Cheap to leave on in production.
-static void logCamChanges() {
-    static bool      lastPresent = false;
-    static CamColour lastColour  = CAM_NONE;
-    static bool      lastLink    = false;
-
-    if (cam.linkOk != lastLink) {
-        Serial.print(F("[cam] link: "));
-        Serial.println(cam.linkOk ? F("OK") : F("LOST"));
-        lastLink = cam.linkOk;
-    }
-    if (cam.present != lastPresent || cam.colour != lastColour) {
-        Serial.print(F("[cam] "));
-        Serial.print(cam.present ? F("present ") : F("absent  "));
-        Serial.print(F("colour="));
-        Serial.print(camColourName(cam.colour));
-        Serial.print(F(" pct="));
-        Serial.println(cam.pct);
-        lastPresent = cam.present;
-        lastColour  = cam.colour;
-    }
-}
-
 // ---------------------------------------------------------------------
 // Arduino calls setup() once at power-on / after reset.
 void setup() {
@@ -497,8 +352,6 @@ void setup() {
     Serial1.begin(9600);           // Hardware UART on D18/D19 — talks to the HC-05.
                                    // 9600 must match what we set with AT+UART
                                    // when configuring the modules.
-    cameraSetup();                 // Hardware UART2 on D16/D17 — talks to the
-                                   // ESP32-WROVER CAM at 115200 (see CAM_BAUD).
 
     // Tell the Servo library which pin to drive for each joint. `.attach()`
     // hooks the pin into the library's internal 50 Hz pulse generator.
@@ -513,7 +366,7 @@ void setup() {
 
     // F("...") stores the string in flash (program memory) instead of RAM.
     // RAM is precious on the Mega (8 KB) — every F() saves a few bytes.
-    Serial.println(F("[arm] boot OK — Serial1=HC-05@9600, Serial2=cam@115200"));
+    Serial.println(F("[arm] boot OK — Serial1=HC-05@9600"));
     lastFrameMs = millis();
     lastTickMs  = millis();
 }
@@ -531,11 +384,6 @@ void loop() {
         }
     }
 
-    // 1b. Drain the camera receive buffer. Non-blocking; updates `cam`
-    //     in place. logCamChanges() prints transitions only, so it
-    //     doesn't spam the USB monitor at the camera's frame rate.
-    cameraPoll();
-    logCamChanges();
     logPositions();
 
     // 1c. USB serial commands — test triggers + mode toggle. Each char
@@ -584,23 +432,6 @@ void loop() {
 
     // 1d. Advance the pickup sequence. No-op when IDLE.
     seqTick();
-
-    // ---- Sort-mode hook (autonomous mode) -------------------------------
-    // When `cam.linkOk && cam.present`, branch on `cam.colour` to choose
-    // a destination bin. Leave the manual joystick path untouched — the
-    // sort-mode planner can override `axes[].target` between this point
-    // and slewAndWrite() below.
-    //
-    // Example skeleton:
-    //   if (sortModeActive && cam.linkOk && cam.present) {
-    //       switch (cam.colour) {
-    //           case CAM_RED:    moveToBin(BIN_A); break;
-    //           case CAM_GREEN:  moveToBin(BIN_B); break;
-    //           case CAM_BLUE:   moveToBin(BIN_C); break;
-    //           case CAM_YELLOW: moveToBin(BIN_D); break;
-    //           default: break;
-    //       }
-    //   }
 
     // 2. Every TICK_MS, slew the servos one step toward their targets.
     uint32_t now = millis();
