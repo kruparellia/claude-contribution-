@@ -79,7 +79,12 @@ static constexpr uint8_t PIN_CLAW_POT = A4;  // claw position dial (10k linear)
 //   stomping the homed value.
 static constexpr int16_t  JOY_CENTER   = 512;
 static constexpr int16_t  JOY_DEADZONE = 60;
-static constexpr float    MAX_RATE     = 90.0f;   // deg/s — joystick joints
+// MAX_RATE matches arm_mega's MAX_DEG_PER_SEC so the controller never
+// integrates commanded angle faster than the arm can physically follow.
+// If they were mismatched (controller faster), letting go of the stick
+// would leave a queue of "commanded angle ahead of actual" that the arm
+// would keep chasing for a moment — feels like stop-overshoot.
+static constexpr float    MAX_RATE     = 60.0f;   // deg/s — joystick joints
 static constexpr float    BASE_RATE    = 60.0f;   // deg/s — base spin
 
 // Joystick expo curve strength for the shoulder/elbow sticks. 0.0 = linear
