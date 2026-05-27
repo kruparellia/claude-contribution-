@@ -282,7 +282,11 @@ def main(camera_index: int = 0) -> None:
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
+            # Without a brief sleep, a disconnected camera spins the Pi
+            # at 100% CPU printing this message thousands of times a
+            # second — observed on the Pi 4B during a USB cable drop.
             print("[warn] Missed frame — retrying.")
+            time.sleep(0.05)
             continue
 
         # ---- FPS counter ----
