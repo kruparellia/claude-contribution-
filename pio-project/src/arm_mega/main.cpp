@@ -357,7 +357,15 @@ static void slewAndWrite(uint32_t dtMs) {
         if (err >  stepMax) err =  stepMax;                    // cap forward speed
         if (err < -stepMax) err = -stepMax;                    // cap reverse speed
         a.current += err;                                      // advance our internal angle
-        a.servo.write((int)(a.current + 0.5f));                // round-to-nearest, push to servo
+        // Final defence-in-depth clamp. `target` is already clamped on
+        // input and `current` is bounded by integration toward target,
+        // so this never trips today — but if either invariant ever
+        // breaks (e.g. someone writes a.current from a sort-mode planner
+        // without re-clamping), the servo still gets a value inside the
+        // mechanical envelope.
+        uint8_t out = (uint8_t)(a.current + 0.5f);
+        out = clampTo(out, a.lim);
+        a.servo.write(out);
     }
 }
 
