@@ -98,6 +98,13 @@ static constexpr uint32_t SEQ_DWELL_MS      = 250;
 // tolerance because manual homing is open-loop and the user might be a
 // degree or two off after pressing 'h' on the controller.
 static constexpr uint8_t  SEQ_HOME_TOL_DEG  = 5;
+// Any axis moving by more than this between consecutive BT frames is
+// treated as the user actively driving the joystick (and therefore as a
+// manual-override of an in-flight sequence). Below this, the frame is a
+// heartbeat from a parked controller and the sequence is allowed to keep
+// running. Sized larger than one slew step (1.2 deg/tick at 60 deg/s) so
+// the threshold can't be tripped by accumulated rounding.
+static constexpr uint8_t  SEQ_OVERRIDE_DEG  = 2;
 
 // ---- Camera link constants -----------------------------------------
 // Baud must match LINK_BAUD in esp32_color_detect.ino.
@@ -291,10 +298,44 @@ static void seqTick() {
 // the *targets* — the actual servo motion is paced by slewAndWrite().
 // Each angle is clamped on the way in so a buggy controller can't drive
 // the arm past its mechanical stops.
-// Manual override: any incoming BT frame aborts an in-flight sequence.
+//
+// Manual override: a sequence is aborted only when the user is *actually*
+// driving the joystick, i.e. the new frame differs from the previous one
+// by more than SEQ_OVERRIDE_DEG on any axis. A parked controller sends
+// identical 50 Hz heartbeats; without this check those heartbeats would
+// kill the sequence ~20 ms after seqStart().
 static void applyFrame(const ArmProto::Frame& f) {
+    // Initialise prev to the safe starting pose so the very first frame
+    // after boot (controller normally sitting at HOME too) doesn't look
+    // like a giant deflection vs zero-initialised state.
+    static ArmProto::Frame prev {
+        LIM_BASE.initial, LIM_SHOULDER.initial,
+        LIM_ELBOW.initial, LIM_CLAW.initial, 0
+    };
+
+    uint8_t maxDelta = 0;
+    auto check = [&](uint8_t a, uint8_t b) {
+        uint8_t d = a > b ? a - b : b - a;
+        if (d > maxDelta) maxDelta = d;
+    };
+    check(f.base,     prev.base);
+    check(f.shoulder, prev.shoulder);
+    check(f.elbow,    prev.elbow);
+    check(f.claw,     prev.claw);
+    prev = f;
+
+    bool userIsDriving = (maxDelta > SEQ_OVERRIDE_DEG);
+
+    if (seqState != SeqState::IDLE && !userIsDriving) {
+        // Heartbeat from a parked controller. Pet the BT-link watchdog so
+        // it doesn't freeze the arm mid-sequence, but leave targets alone
+        // — seqTick() owns them while a sequence is running.
+        lastFrameMs = millis();
+        return;
+    }
+
     if (seqState != SeqState::IDLE) {
-        seqAbort(F("manual override (BT frame)"));
+        seqAbort(F("manual override (joystick)"));
     }
     axes[0].target = clampTo(f.base,     axes[0].lim);
     axes[1].target = clampTo(f.shoulder, axes[1].lim);
