@@ -81,6 +81,14 @@ static constexpr int16_t  JOY_CENTER   = 512;
 static constexpr int16_t  JOY_DEADZONE = 60;
 static constexpr float    MAX_RATE     = 90.0f;   // deg/s — joystick joints
 static constexpr float    BASE_RATE    = 60.0f;   // deg/s — base spin
+
+// Joystick expo curve strength for the shoulder/elbow sticks. 0.0 = linear
+// (full deflection scales straight into MAX_RATE), 1.0 = pure cubic (very
+// soft middle, hard top end). 0.6 gives a noticeably gentler feel for
+// small/fine corrections while still reaching MAX_RATE at full deflection.
+// Base (button-spin) and claw (absolute pot) bypass this — they aren't
+// proportional inputs.
+static constexpr float    JOY_EXPO     = 0.6f;
 static constexpr int16_t  POT_NOISE    = 6;       // ADC counts of dead-band jitter
 static constexpr uint32_t POT_STILL_MS = 500;     // knob still this long -> stop driving claw
 
@@ -172,6 +180,16 @@ static inline float applyDeadzone(int16_t raw) {
 
 static inline float clampF(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
+}
+
+// Cubic expo curve. Input and output are both in [-1..+1]. Smooth and
+// monotonic so there are no flat spots or kinks. With k=0 this returns v
+// unchanged; with k=1 it returns v^3 (very soft middle). At v=±1 the
+// output is ±1 regardless of k, so full-stick still hits MAX_RATE.
+static inline float applyExpo(float v, float k) {
+    float a = v < 0 ? -v : v;
+    float curved = a * (1.0f - k + k * a * a);
+    return v < 0 ? -curved : curved;
 }
 
 // In this variant we only care about each stick's Y axis. We still read
@@ -360,8 +378,13 @@ void loop() {
     readStick(stick1, j1x, j1y);
     readStick(stick2, j2x, j2y);
 
-    angShoulder = clampF(angShoulder - j1y * MAX_RATE * dt, L_SHOULDER.lo, L_SHOULDER.hi);
-    angElbow    = clampF(angElbow    - j2y * MAX_RATE * dt, L_ELBOW.lo,    L_ELBOW.hi);
+    // Expo curve before integration: small stick deflections produce
+    // gentle motion, only the last bit of throw gives full MAX_RATE.
+    // Makes fine positioning much easier to drive by hand.
+    float j1yExpo = applyExpo(j1y, JOY_EXPO);
+    float j2yExpo = applyExpo(j2y, JOY_EXPO);
+    angShoulder = clampF(angShoulder - j1yExpo * MAX_RATE * dt, L_SHOULDER.lo, L_SHOULDER.hi);
+    angElbow    = clampF(angElbow    - j2yExpo * MAX_RATE * dt, L_ELBOW.lo,    L_ELBOW.hi);
     (void)j1x; (void)j2x;   // X axes intentionally unused
 
     // 5. Joystick SWs -> base rotation (held = spin, released = stop).
