@@ -2,23 +2,18 @@
 """
 EE6003 robotic arm — orchestrated flash of both PlatformIO environments.
 
-Builds arm_mega + the controller env first (catches compile errors before
+Builds arm_mega + controller_uno_r4 first (catches compile errors before
 disturbing any hardware), then uploads them in order. If a board isn't
-plugged in, that env is skipped (not fatal) so the other board still gets
-flashed. Per-env failures are collected and reported at the end with the
-exact pio return code, so nothing fails silently.
-
-By default this flashes the v2 controller firmware (controller_uno_r4_v2)
-and arm_mega. The original 4-axis joystick firmware (controller_uno_r4)
-is still buildable/uploadable via --only.
+plugged in, that env is skipped (not fatal) so the other board still
+gets flashed. Per-env failures are collected and reported at the end
+with the exact pio return code, so nothing fails silently.
 
 Usage (from anywhere — script auto-locates platformio.ini):
 
     python scripts/flash_all.py
     python scripts/flash_all.py --skip-build
     python scripts/flash_all.py --only arm_mega
-    python scripts/flash_all.py --only controller_uno_r4_v2
-    python scripts/flash_all.py --only controller_uno_r4      # original firmware
+    python scripts/flash_all.py --only controller_uno_r4
     python scripts/flash_all.py --no-prompt                   # skip HC-05 prompt
     python scripts/flash_all.py --force                       # try upload even if device not detected
 
@@ -38,9 +33,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ENV_ARM    = "arm_mega"
-ENV_CTL    = "controller_uno_r4_v2"   # default controller env flashed by this script
-ENV_CTL_V1 = "controller_uno_r4"      # original firmware, available via --only
+ENV_ARM = "arm_mega"
+ENV_CTL = "controller_uno_r4"
 
 # USB VID:PID fingerprints that identify each board. Strings are matched
 # case-insensitively as substrings against the `hwid` field returned by
@@ -60,17 +54,11 @@ DEVICE_FINGERPRINTS: dict[str, list[str]] = {
         "2341:1002",  # Uno R4 WiFi (just in case)
         "2341:0369",  # Uno R4 Minima DFU mode
     ],
-    ENV_CTL_V1: [
-        "2341:0069",
-        "2341:1002",
-        "2341:0369",
-    ],
 }
 
 BOARD_LABEL: dict[str, str] = {
-    ENV_ARM:    "Elegoo/Arduino Mega 2560",
-    ENV_CTL:    "Arduino Uno R4 Minima (v2 controller)",
-    ENV_CTL_V1: "Arduino Uno R4 Minima (v1 controller)",
+    ENV_ARM: "Elegoo/Arduino Mega 2560",
+    ENV_CTL: "Arduino Uno R4 Minima (controller)",
 }
 
 
@@ -162,7 +150,7 @@ def main() -> int:
     ap.add_argument("--skip-build", action="store_true", help="skip the up-front 'pio run' build step")
     ap.add_argument(
         "--only",
-        choices=[ENV_ARM, ENV_CTL, ENV_CTL_V1],
+        choices=[ENV_ARM, ENV_CTL],
         help="upload only one specific environment",
     )
     ap.add_argument("--no-prompt", action="store_true", help="don't pause for HC-05 disconnect confirmation")
@@ -174,7 +162,7 @@ def main() -> int:
     print(f"project root: {root}")
 
     targets = [ENV_ARM, ENV_CTL] if args.only is None else [args.only]
-    controller_envs = {ENV_CTL, ENV_CTL_V1}
+    controller_envs = {ENV_CTL}
 
     if not args.skip_build:
         # Build every upload target up-front (one `pio run` invocation, multiple

@@ -65,17 +65,19 @@ python scripts/home.py
 - **Uno R4 Minima D0/D1** are shared with USB upload. Unplug the HC-05 TXD from D0 while uploading, then reconnect.
 - **Servo power ≠ Arduino power.** 4× MG996R can briefly pull >5 A. The Mega's 5 V rail cannot supply that — power servos from the bench PSU only, with common ground back to the Mega.
 
-## Control scheme (two joysticks, 4 DOF)
+## Control scheme (two joysticks + claw pot, 4 DOF)
 
-| Stick                | X-axis      | Y-axis        |
-|----------------------|-------------|---------------|
-| Joystick 1 (left)    | base        | shoulder      |
-| Joystick 2 (right)   | claw        | elbow         |
+| Input                              | Joint                          |
+|------------------------------------|--------------------------------|
+| Joystick 1 (left) — Y axis         | shoulder (rate-controlled)     |
+| Joystick 2 (right) — Y axis        | elbow (rate-controlled)        |
+| Joystick 1 SW held                 | base rotates CCW               |
+| Joystick 2 SW held                 | base rotates CW                |
+| Claw potentiometer (A4)            | claw (absolute, "only while turning") |
 
-- Each axis is **rate-controlled** — joystick deflection sets velocity, not position.
-- **Long-press either SW (≥ 1 s)** snaps the arm back to the home pose (all axes 90°).
-- **Short-press SW** is reserved (currently a no-op).
-- Compile-time switch `DIAGONAL_GATE` in `src/controller_uno_r4/main.cpp` — set to `1` to force one-axis-at-a-time motion per stick (whichever axis has the larger deflection wins). Default `0` allows simultaneous X+Y.
+- Shoulder/elbow are **rate-controlled** with a cubic expo curve so small deflections produce gentle motion and full deflection hits `MAX_RATE`.
+- The claw pot only overwrites the commanded claw angle while the knob is *actively turning* (see the `POT_STILL_MS` note in `controller_uno_r4/main.cpp`). Lets the `h` USB hotkey home the claw without the pot immediately stomping it.
+- Type `h` (or `H`) in the controller's USB serial monitor to snap all four joints back to the HOME pose. There is no long-press home gesture in this firmware.
 
 ## Next steps (for the EE6003 60%+ bands)
 
