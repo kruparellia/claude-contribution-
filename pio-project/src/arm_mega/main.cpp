@@ -66,11 +66,14 @@ static constexpr Limits LIM_SHOULDER { 30, 140,  105 };
 static constexpr Limits LIM_ELBOW    { 30, 150,  110 };
 static constexpr Limits LIM_CLAW     { 20, 160,  90 };
 
-// Max angular speed per servo. 120 deg/s is comfortable for MG996R and
-// keeps current draw well below stall. Lower this if the battery sags.
+// Max angular speed per servo. 60 deg/s is well below MG996R stall current
+// even at the shoulder's worst-case lever arm (arm fully extended), which
+// reduces the chance of the motor losing sync with its commanded angle —
+// the open-loop failure mode that triggered this slowdown. Same value for
+// every joint so the arm behaves uniformly and is easier to drive/debug.
 // This is what makes the arm move SMOOTHLY instead of snapping instantly
 // to whatever angle the joystick last asked for — see slewAndWrite().
-static constexpr float MAX_DEG_PER_SEC = 120.0f;
+static constexpr float MAX_DEG_PER_SEC = 60.0f;
 
 // If we haven't seen a valid frame in this long, hold position.
 // Acts as a safety net: if the BT link drops or the controller is
@@ -84,8 +87,8 @@ static constexpr uint32_t TICK_MS = 20;  // 50 Hz
 
 // ---- Pickup-sequence tunables --------------------------------------
 // How close each joint must be to a keyframe before we count as "arrived".
-// 2° is well within MG996R repeatability and below one slew step
-// (120°/s * 20 ms = 2.4°/tick) so we don't oscillate around the target.
+// 2° is well within MG996R repeatability and above one slew step
+// (60°/s * 20 ms = 1.2°/tick) so we don't oscillate around the target.
 static constexpr uint8_t  SEQ_TOLERANCE_DEG = 2;
 // Hold each pose this long after arrival. Critical at GRASP_CLOSE /
 // DROP_RELEASE — gives the gripper time to actually close/open before
