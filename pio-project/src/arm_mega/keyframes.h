@@ -21,14 +21,14 @@ struct Pose {
 };
 
 // Home pose — must match LIM_*.initial in main.cpp.
-static constexpr Pose KF_HOME { 80, 105, 110, 90 };
+static constexpr Pose KF_HOME { 142, 30, 113, 21 };
 
-static constexpr Pose KF_APPROACH     {  80, 105, 110,  90 };
-static constexpr Pose KF_GRASP_DOWN   {  80, 105, 110,  90 };
-static constexpr Pose KF_GRASP_CLOSE  {  80, 105, 110,  90 };
-static constexpr Pose KF_LIFT         {  80, 105, 110,  90 };
-static constexpr Pose KF_DROP_OVER    {  80, 105, 110,  90 };
-static constexpr Pose KF_DROP_RELEASE {  80, 105, 110,  90 };
+static constexpr Pose KF_APPROACH     { 142, 30, 113,  21 };
+static constexpr Pose KF_GRASP_DOWN   { 142, 30, 113,  21 };
+static constexpr Pose KF_GRASP_CLOSE  { 142, 30, 113,  21 };
+static constexpr Pose KF_LIFT         { 142, 30, 113,  21 };
+static constexpr Pose KF_DROP_OVER    { 142, 30, 113,  21 };
+static constexpr Pose KF_DROP_RELEASE { 142, 30, 113,  21 };
 
 static constexpr Pose PICKUP_SEQUENCE[] = {
     KF_HOME,

@@ -58,10 +58,10 @@ static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 // Keeping them grouped means we can pass one struct around instead of
 // three loose variables, and the compiler can inline the whole thing.
 struct Limits { uint8_t lo, hi, initial; };
-static constexpr Limits LIM_BASE     {  0, 180,  80 };
-static constexpr Limits LIM_SHOULDER { 30, 140,  105 };
-static constexpr Limits LIM_ELBOW    { 30, 150,  110 };
-static constexpr Limits LIM_CLAW     { 20, 160,  90 };
+static constexpr Limits LIM_BASE     {  0, 180, 142 };
+static constexpr Limits LIM_SHOULDER { 30, 140,  30 };
+static constexpr Limits LIM_ELBOW    { 30, 150, 113 };
+static constexpr Limits LIM_CLAW     { 20, 160,  21 };
 
 // Max angular speed per servo. 60 deg/s is well below MG996R stall current
 // even at the shoulder's worst-case lever arm (arm fully extended), which
