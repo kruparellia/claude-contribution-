@@ -66,10 +66,10 @@ static constexpr uint8_t PIN_CLAW_POT = A4;  // claw position dial (10k linear)
 // POT_NOISE: ADC readings on an analog pin jitter by a few counts even
 //   when the knob is perfectly still. We consider the knob "moving" only
 //   if the reading has changed by more than POT_NOISE counts since the
-//   last stored sample. ~6 counts (~0.6 % of full scale) is the sweet
-//   spot for a typical 10k pot on the Uno R4's 10-bit ADC — small enough
-//   that intentional knob turns register instantly, large enough that
-//   thermal/EMI jitter doesn't keep waking the claw.
+//   last stored sample. Measured noise floor on this rig is ~20 counts
+//   peak-to-peak; 15 keeps intentional turns responsive while ignoring
+//   the bulk of that jitter. (Originally 6, which let pure noise keep
+//   the pot pinned ACTIVE forever and yanked the claw away from HOME.)
 //
 // POT_STILL_MS: once the knob has been still (no change > POT_NOISE) for
 //   this long, we STOP overwriting angClaw from the pot. That's what
@@ -92,8 +92,15 @@ static constexpr float    BASE_RATE    = 60.0f;   // deg/s — base spin
 // Base (button-spin) and claw (absolute pot) bypass this — they aren't
 // proportional inputs.
 static constexpr float    JOY_EXPO     = 0.6f;
-static constexpr int16_t  POT_NOISE    = 6;       // ADC counts of dead-band jitter
+static constexpr int16_t  POT_NOISE    = 15;      // ADC counts of dead-band jitter
 static constexpr uint32_t POT_STILL_MS = 500;     // knob still this long -> stop driving claw
+// POT_ARM_DELTA: the pot is "armed" only after the user deliberately turns
+// the knob this far from where it was sitting at boot. Until then, the
+// claw is held at HOME regardless of pot readings. Stops the claw from
+// being yanked to wherever the knob happens to be parked when the
+// controller powers up. 50 counts ≈ 5 % of the pot's travel — easy to
+// exceed with a deliberate twist, impossible to hit from noise.
+static constexpr int16_t  POT_ARM_DELTA = 50;
 
 // Home pose — must match L_*.initial on the arm side.
 struct Pose { uint8_t base, shoulder, elbow, claw; };
@@ -150,6 +157,12 @@ uint32_t lastTickMs = 0;
 // has a chance to stick.
 int16_t  potLastRaw    = 0;
 uint32_t potLastMoveMs = 0;
+// Where the pot was sitting at boot, and whether the user has since
+// turned the knob far enough to "arm" pot->claw driving. Sticky once
+// true — after the first deliberate twist, normal POT_NOISE logic
+// takes over for the rest of the session.
+int16_t  potBootRaw    = 0;
+bool     potArmed      = false;
 
 // When did we last print the [ang] line? Separate timer from the tx tick
 // because we want angle output even when the user isn't moving anything.
@@ -224,10 +237,15 @@ static void snapHome() {
     angShoulder = HOME.shoulder;
     angElbow    = HOME.elbow;
     angClaw     = HOME.claw;
-    // Force the pot to be considered "parked" until the user turns it
-    // again. Without this, the very next tick's pot read could re-stomp
-    // the homed claw angle (because POT_STILL_MS hasn't elapsed yet).
-    potLastMoveMs = 0;     // pretend the last knob movement was at boot
+    // Re-park the pot: rebase the "boot" reading to wherever the knob
+    // is sitting NOW and disarm. The claw will then sit at HOME until
+    // the user makes a fresh deliberate twist (>POT_ARM_DELTA from the
+    // current knob position). Without this, an already-armed pot would
+    // immediately stomp the homed claw angle on the next tick.
+    potBootRaw    = analogRead(PIN_CLAW_POT);
+    potLastRaw    = potBootRaw;
+    potArmed      = false;
+    potLastMoveMs = 0;
     Serial.println(F("[ctl] home"));
 }
 
@@ -275,7 +293,11 @@ static void handleCommand(char* line) {
             break;
         case 'c':
             angClaw       = clampF(v, L_CLAW.lo, L_CLAW.hi);
-            potLastMoveMs = 0;     // park the pot so this value isn't immediately overwritten
+            // Re-park the pot — see snapHome() for the rationale.
+            potBootRaw    = analogRead(PIN_CLAW_POT);
+            potLastRaw    = potBootRaw;
+            potArmed      = false;
+            potLastMoveMs = 0;
             Serial.print(F("[cal] claw="));     Serial.println((int)(angClaw + 0.5f));
             break;
         default:
@@ -345,8 +367,13 @@ void setup() {
     Serial.println(F("[ctl] cmds: h=home  b<deg>=base  s<deg>=shoulder  e<deg>=elbow  c<deg>=claw"));
 
     // Seed the pot state with the current knob position so we don't
-    // see a spurious "knob moved" on the very first tick.
+    // see a spurious "knob moved" on the very first tick. Also remember
+    // it as the "boot" reading — we'll refuse to drive the claw from
+    // the pot until the user turns the knob more than POT_ARM_DELTA
+    // away from this value, so the claw stays at HOME on power-up.
     potLastRaw    = analogRead(PIN_CLAW_POT);
+    potBootRaw    = potLastRaw;
+    potArmed      = false;
     potLastMoveMs = 0;
     lastTickMs    = millis();
 }
@@ -421,11 +448,19 @@ void loop() {
     //    smooth re-entry instead, slew angClaw toward potToClawDeg(raw)
     //    rather than assigning it directly — this is the spot.
     int16_t potRaw = analogRead(PIN_CLAW_POT);
+    // Arm the pot the first time it strays far enough from its boot
+    // position to be unambiguous user intent. Once armed, stays armed
+    // until reset — normal POT_NOISE logic then handles "is the user
+    // still turning it?".
+    if (!potArmed && abs(potRaw - potBootRaw) > POT_ARM_DELTA) {
+        potArmed   = true;
+        potLastRaw = potRaw;       // resync so the noise check below doesn't immediately re-trigger
+    }
     if (abs(potRaw - potLastRaw) > POT_NOISE) {
         potLastRaw    = potRaw;
         potLastMoveMs = now;
     }
-    bool potActive = (now - potLastMoveMs) < POT_STILL_MS;
+    bool potActive = potArmed && (now - potLastMoveMs) < POT_STILL_MS;
     if (potActive) {
         angClaw = clampF(potToClawDeg(potLastRaw), L_CLAW.lo, L_CLAW.hi);
     }
