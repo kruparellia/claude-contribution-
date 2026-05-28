@@ -5,13 +5,13 @@
 // Two KY-023 / HW-504 joysticks + one rotary potentiometer (10k linear),
 // four MG996R servos. Control mapping:
 //
-//   Joystick 1  (left)   Y axis   ->  SHOULDER  (rate control)
-//                        X axis   ->  unused (idle)
-//                        SW held  ->  BASE rotates anti-clockwise (CCW)
-//
-//   Joystick 2  (right)  Y axis   ->  ELBOW  (rate control)
-//                        X axis   ->  unused (idle)
+//   Joystick 1  (left)   X axis   ->  SHOULDER  (rate control)
+//                        Y axis   ->  unused (idle)
 //                        SW held  ->  BASE rotates clockwise (CW)
+//
+//   Joystick 2  (right)  X axis   ->  ELBOW  (rate control)
+//                        Y axis   ->  unused (idle)
+//                        SW held  ->  BASE rotates anti-clockwise (CCW)
 //
 //   Potentiometer (A4)   knob position  ->  CLAW angle  (absolute control,
 //                        but "only commit while turning" — see note below)
@@ -47,11 +47,11 @@
 // ---- Pins ----------------------------------------------------------
 static constexpr uint8_t PIN_J1_VRX  = A0;
 static constexpr uint8_t PIN_J1_VRY  = A1;
-static constexpr uint8_t PIN_J1_SW   = 2;    // hold -> base CCW
+static constexpr uint8_t PIN_J1_SW   = 2;    // hold -> base CW
 
 static constexpr uint8_t PIN_J2_VRX  = A2;
 static constexpr uint8_t PIN_J2_VRY  = A3;
-static constexpr uint8_t PIN_J2_SW   = 3;    // hold -> base CW
+static constexpr uint8_t PIN_J2_SW   = 3;    // hold -> base CCW
 
 static constexpr uint8_t PIN_CLAW_POT = A4;  // claw position dial (10k linear)
 
@@ -129,8 +129,8 @@ struct Button {
     bool     raw;
     uint32_t edgeMs;
 };
-Button btnJ1Sw { PIN_J1_SW, HIGH, HIGH, 0 };  // hold = base CCW
-Button btnJ2Sw { PIN_J2_SW, HIGH, HIGH, 0 };  // hold = base CW
+Button btnJ1Sw { PIN_J1_SW, HIGH, HIGH, 0 };  // hold = base CW
+Button btnJ2Sw { PIN_J2_SW, HIGH, HIGH, 0 };  // hold = base CCW
 
 // Live joint angles — kept as floats to integrate sub-degree changes.
 float angBase     = HOME.base;
@@ -375,7 +375,7 @@ void loop() {
     float dt = (now - lastTickMs) / 1000.0f;
     lastTickMs = now;
 
-    // 4. Joysticks -> shoulder + elbow (Y inverted so pushing the stick
+    // 4. Joysticks -> shoulder + elbow (X inverted so pushing the stick
     //    UP decreases the joint angle, matching arm-mounted-in-front feel).
     float j1x, j1y, j2x, j2y;
     readStick(stick1, j1x, j1y);
@@ -384,17 +384,17 @@ void loop() {
     // Expo curve before integration: small stick deflections produce
     // gentle motion, only the last bit of throw gives full MAX_RATE.
     // Makes fine positioning much easier to drive by hand.
-    float j1yExpo = applyExpo(j1y, JOY_EXPO);
-    float j2yExpo = applyExpo(j2y, JOY_EXPO);
-    angShoulder = clampF(angShoulder - j1yExpo * MAX_RATE * dt, L_SHOULDER.lo, L_SHOULDER.hi);
-    angElbow    = clampF(angElbow    - j2yExpo * MAX_RATE * dt, L_ELBOW.lo,    L_ELBOW.hi);
-    (void)j1x; (void)j2x;   // X axes intentionally unused
+    float j1xExpo = applyExpo(j1x, JOY_EXPO);
+    float j2xExpo = applyExpo(j2x, JOY_EXPO);
+    angShoulder = clampF(angShoulder - j1xExpo * MAX_RATE * dt, L_SHOULDER.lo, L_SHOULDER.hi);
+    angElbow    = clampF(angElbow    + j2xExpo * MAX_RATE * dt, L_ELBOW.lo,    L_ELBOW.hi);
+    (void)j1y; (void)j2y;   // Y axes intentionally unused
 
     // 5. Joystick SWs -> base rotation (held = spin, released = stop).
     //    If both SWs are held the rotations cancel — fine, it's an
     //    obvious user mistake rather than something to silently arbitrate.
-    bool spinCCW = (btnJ1Sw.state == LOW);
-    bool spinCW  = (btnJ2Sw.state == LOW);
+    bool spinCW  = (btnJ1Sw.state == LOW);
+    bool spinCCW = (btnJ2Sw.state == LOW);
     float baseDelta = 0.0f;
     if (spinCCW) baseDelta -= BASE_RATE * dt;
     if (spinCW)  baseDelta += BASE_RATE * dt;
