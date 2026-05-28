@@ -96,12 +96,23 @@ static constexpr uint32_t SEQ_DWELL_MS      = 250;
 // degree or two off after pressing 'h' on the controller.
 static constexpr uint8_t  SEQ_HOME_TOL_DEG  = 5;
 // Any axis moving by more than this between consecutive BT frames is
-// treated as the user actively driving the joystick (and therefore as a
-// manual-override of an in-flight sequence). Below this, the frame is a
-// heartbeat from a parked controller and the sequence is allowed to keep
-// running. Sized larger than one slew step (1.2 deg/tick at 60 deg/s) so
-// the threshold can't be tripped by accumulated rounding.
-static constexpr uint8_t  SEQ_OVERRIDE_DEG  = 2;
+// treated as the user actively driving the joystick. Set to 0 so even a
+// single degree of intentional input on the controller kicks the arm
+// out of auto mode — the user wanted "any movement on the remote
+// overrides auto". userIsDriving also OR's in the FLAG_BUTTON bit from
+// the protocol to catch base-button taps and pot activity that may not
+// register as an angle change between two consecutive frames.
+// Safe because a truly parked controller emits identical frames (the
+// joystick deadzone + pot arming gate suppress all numerical drift on
+// the controller side, so maxDelta is genuinely 0 when nobody's
+// touching it).
+static constexpr uint8_t  SEQ_OVERRIDE_DEG  = 0;
+// The controller is considered "idle" (no joystick movement) once this
+// much time has passed since the last frame whose delta exceeded
+// SEQ_OVERRIDE_DEG. Used to gate entry into auto mode — we refuse 'a' to
+// turn auto ON unless the controller has been parked for this long, so
+// you can't arm the arm while you're mid-stick-push.
+static constexpr uint32_t CONTROLLER_IDLE_MS = 500;
 
 // ---- State ----------------------------------------------------------
 // Four Servo objects, one per joint. `Servo` is a class from <Servo.h>;
@@ -161,6 +172,18 @@ static SeqState seqState     = SeqState::IDLE;
 static uint8_t  seqIndex     = 0;            // index into PICKUP_SEQUENCE[]
 static uint32_t seqEnteredMs = 0;            // millis() when current state began
 static bool     seqAutoMode  = false;        // false = triggers are ignored
+// millis() at the last frame whose delta exceeded SEQ_OVERRIDE_DEG.
+// Updated by applyFrame() and read by controllerIdle() / the 'a' handler
+// to enforce "can only enable auto mode while the controller is parked".
+static uint32_t lastControllerMoveMs = 0;
+
+// True iff the controller has been parked (no over-threshold motion) for
+// CONTROLLER_IDLE_MS. Note this is also true at boot before any frame has
+// arrived — that's intentional, you can arm auto mode before powering
+// the controller on.
+static inline bool controllerIdle() {
+    return (millis() - lastControllerMoveMs) > CONTROLLER_IDLE_MS;
+}
 
 // Push PICKUP_SEQUENCE[i] into axes[].target and pet the BT watchdog so
 // the link-timeout check in loop() doesn't snap targets back to current
@@ -289,12 +312,36 @@ static void applyFrame(const ArmProto::Frame& f) {
     check(f.claw,     prev.claw);
     prev = f;
 
-    bool userIsDriving = (maxDelta > SEQ_OVERRIDE_DEG);
+    // Angle delta catches stick deflection + sustained button presses
+    // (which integrate into base angle). FLAG_BUTTON catches the edge
+    // cases: a button tap so brief it didn't yet advance the base by a
+    // full degree, or pot activity that hasn't moved the rounded claw
+    // value yet. Either is enough to count as "user touched something".
+    bool userIsDriving = (maxDelta > SEQ_OVERRIDE_DEG)
+                      || (f.flags & ArmProto::FLAG_BUTTON);
 
-    if (seqState != SeqState::IDLE && !userIsDriving) {
-        // Heartbeat from a parked controller. Pet the BT-link watchdog so
-        // it doesn't freeze the arm mid-sequence, but leave targets alone
-        // — seqTick() owns them while a sequence is running.
+    // Stamp the last-move timestamp + kick auto mode OFF the moment the
+    // user touches the sticks. The 'a' command consults controllerIdle()
+    // (set by the stamp below) before allowing auto to be re-enabled, so
+    // you can't arm a sequence while you're still driving manually.
+    if (userIsDriving) {
+        lastControllerMoveMs = millis();
+        if (seqAutoMode) {
+            seqAutoMode = false;
+            Serial.println(F("[seq] auto OFF (controller moved)"));
+        }
+    }
+
+    if ((seqState != SeqState::IDLE || seqAutoMode) && !userIsDriving) {
+        // Heartbeat from a parked controller. Two cases for ignoring it:
+        //   - A sequence is running (seqTick owns the targets).
+        //   - Auto mode is armed (Pi is in charge; the controller's
+        //     unchanging command stream must not stomp Pi-set targets
+        //     like 'h' or a pickup keyframe).
+        // Either way, pet the BT-link watchdog so it doesn't freeze the
+        // arm, but leave targets alone. As soon as a stick is moved
+        // (userIsDriving = true), the block above turns auto OFF and
+        // execution falls through to apply the new frame normally.
         lastFrameMs = millis();
         return;
     }
@@ -401,6 +448,15 @@ void loop() {
                 seqAbort(F("user 'x'"));
                 break;
             case 'a': case 'A':
+                // Turning auto OFF is always allowed (safe). Turning it
+                // ON requires the controller to have been idle for
+                // CONTROLLER_IDLE_MS — prevents arming the arm while a
+                // stick is still deflected, which would otherwise cause
+                // the very next BT frame to flip auto right back off.
+                if (!seqAutoMode && !controllerIdle()) {
+                    Serial.println(F("[seq] cannot arm — controller still moving"));
+                    break;
+                }
                 seqAutoMode = !seqAutoMode;
                 Serial.print(F("[seq] auto mode "));
                 Serial.println(seqAutoMode ? F("ON") : F("OFF"));
