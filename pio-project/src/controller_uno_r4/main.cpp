@@ -116,6 +116,10 @@ static constexpr Lim L_CLAW     {  20, 160 };
 // Tx cadence (50 Hz to the arm, identical to original firmware).
 static constexpr uint32_t TICK_MS     = 20;
 static constexpr uint32_t DEBOUNCE_MS = 25;
+// Max ms between two J2-SW press edges to count as a double-tap (home).
+// Long enough to be comfortable, short enough that two unrelated quick
+// presses while spinning the base won't trigger an accidental home.
+static constexpr uint32_t DOUBLE_TAP_MS = 350;
 
 // How often we print the live angle line to USB Serial during calibration.
 // 200 ms = 5 Hz is fast enough to feel responsive when you wiggle the stick
@@ -146,6 +150,9 @@ float angElbow    = HOME.elbow;
 float angClaw     = HOME.claw;
 
 uint32_t lastTickMs = 0;
+
+// millis() of the previous J2-SW press edge — used to detect double-tap-home.
+uint32_t lastJ2PressMs = 0;
 
 // Claw pot state — used to detect "is the knob being actively turned?".
 //   potLastRaw    : last raw ADC reading we considered the user's intent
@@ -383,7 +390,17 @@ void loop() {
 
     // 1. Service the joystick switches every iteration.
     pollButton(btnJ1Sw, now);
-    pollButton(btnJ2Sw, now);
+    if (pollButton(btnJ2Sw, now)) {
+        // Press edge on the elbow-stick button. Two presses inside
+        // DOUBLE_TAP_MS = home. Single presses still fall through to the
+        // base-CCW hold logic below.
+        if (now - lastJ2PressMs <= DOUBLE_TAP_MS) {
+            snapHome();
+            lastJ2PressMs = 0;       // consume the pair — no triple-tap chain
+        } else {
+            lastJ2PressMs = now;
+        }
+    }
 
     // 2. Drain USB Serial for calibration/homing commands. Recognised:
     //      h           -> snap to home pose (only path to home this firmware)
