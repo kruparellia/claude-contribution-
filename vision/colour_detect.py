@@ -92,7 +92,9 @@ COLOURS = [
 # ---------------------------------------------------------------------------
 # Tunable parameters
 # ---------------------------------------------------------------------------
-MIN_BLOB_AREA   = 1500   # px² — contours smaller than this are ignored
+MIN_BLOB_AREA   = 400    # px² — contours smaller than this are ignored
+                         # (lowered from 1500 after the camera moved further
+                         # back; rock now spans ~600–1000 px² instead of ~3000)
 MORPH_KERNEL_SZ = 7      # px — side length of the elliptical morphology kernel
 SIDEBAR_W       = 210    # px — width of the right-side stats panel
 CAM_W, CAM_H    = 640, 480
