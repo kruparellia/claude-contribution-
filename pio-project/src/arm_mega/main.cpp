@@ -58,9 +58,9 @@ static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 // Keeping them grouped means we can pass one struct around instead of
 // three loose variables, and the compiler can inline the whole thing.
 struct Limits { uint8_t lo, hi, initial; };
-static constexpr Limits LIM_BASE     {  0, 180, 142 };
-static constexpr Limits LIM_SHOULDER { 30, 140,  30 };
-static constexpr Limits LIM_ELBOW    { 30, 150, 113 };
+static constexpr Limits LIM_BASE     {  0, 180,  74 };
+static constexpr Limits LIM_SHOULDER { 30, 155,  68 };
+static constexpr Limits LIM_ELBOW    {  0, 180,  55 };
 static constexpr Limits LIM_CLAW     { 20, 160,  21 };
 
 // Max angular speed per servo. 60 deg/s is well below MG996R stall current
@@ -71,6 +71,30 @@ static constexpr Limits LIM_CLAW     { 20, 160,  21 };
 // This is what makes the arm move SMOOTHLY instead of snapping instantly
 // to whatever angle the joystick last asked for — see slewAndWrite().
 static constexpr float MAX_DEG_PER_SEC = 60.0f;
+
+// ---- Shoulder lift interlock ----------------------------------------
+// The shoulder servo stalls when it's driven down far enough to cantilever
+// the forearm out horizontally: the lever arm — and so the gravity torque
+// it must hold — peaks and exceeds the MG996R's stall torque (it "loses
+// power" and can't lift back up until the load is taken off by hand).
+//
+// The fix is an interlock, not an override: the elbow stays fully under
+// remote control the whole time (so you can work it to pick things up),
+// but while the shoulder is down in the stall zone we REFUSE to let it
+// move back UP until the elbow has been bent back far enough to pull the
+// forearm's mass in and shrink the lever arm. We don't speed the elbow up
+// or move it for you — we just pause the shoulder's upward commands until
+// the elbow is tucked, then let them through. Lowering the shoulder and
+// moving the elbow are never blocked.
+//
+// Active only when the shoulder is below (angle above) SHOULDER_LIFT_GATE_DEG.
+// "Tucked enough to lift" means the elbow has reached ELBOW_LIFT_SAFE_DEG.
+static constexpr uint8_t SHOULDER_LIFT_GATE_DEG = 80;    // shoulder angles above this interlock the lift
+static constexpr uint8_t ELBOW_LIFT_SAFE_DEG    = 165;   // elbow must be tucked at least this far to lift
+// Elbow angle the staged home folds to before lifting the shoulder out of
+// the stall zone. A few degrees below the 180° hard stop, comfortably past
+// ELBOW_LIFT_SAFE_DEG so the lift unlocks. See HomeState / homeTick().
+static constexpr uint8_t HOME_FOLD_ELBOW_DEG    = 175;
 
 // If we haven't seen a valid frame in this long, hold position.
 // Acts as a safety net: if the BT link drops or the controller is
@@ -169,6 +193,16 @@ static inline uint8_t clampTo(uint8_t v, const Limits& l) {
 // ---------------------------------------------------------------------
 enum class SeqState : uint8_t { IDLE, MOVING, DWELLING };
 static SeqState seqState     = SeqState::IDLE;
+
+// ---- Staged home --------------------------------------------------------
+// Homing straight to KF_HOME from the stall zone would try to lift the
+// shoulder while the elbow is still extended — the lift interlock would veto
+// it and the arm would hang half-homed. So when home is requested with the
+// shoulder down, we sequence it: FOLD the elbow back, LIFT the shoulder out
+// of the zone, then PLACE the elbow at its home angle. The claw is sent home
+// throughout. Triggered by FLAG_HOME from the controller or the USB 'h'.
+enum class HomeState : uint8_t { IDLE, FOLD, LIFT, PLACE };
+static HomeState homeState   = HomeState::IDLE;
 static uint8_t  seqIndex     = 0;            // index into PICKUP_SEQUENCE[]
 static uint32_t seqEnteredMs = 0;            // millis() when current state began
 static bool     seqAutoMode  = false;        // false = triggers are ignored
@@ -282,6 +316,70 @@ static void seqTick() {
     seqApplyKeyframe(seqIndex);
 }
 
+// Begin a home. If the shoulder is already up out of the stall zone there's
+// nothing to sequence — snap every joint straight to KF_HOME. If it's down
+// in the zone, kick off the staged fold/lift/place instead. Either way the
+// claw heads home immediately, and any running pickup sequence is aborted.
+static void startHome() {
+    seqAbort(F("home command"));
+    axes[3].target = KF_HOME.claw;                          // claw always homes
+    const uint8_t shoulderNow = (uint8_t)(axes[1].current + 0.5f);
+    if (shoulderNow <= SHOULDER_LIFT_GATE_DEG) {
+        homeState = HomeState::IDLE;
+        axes[0].target = KF_HOME.base;
+        axes[1].target = KF_HOME.shoulder;
+        axes[2].target = KF_HOME.elbow;
+        Serial.println(F("[home] snap"));
+    } else {
+        homeState = HomeState::FOLD;                         // fold elbow first
+        axes[0].target = KF_HOME.base;                       // base may travel freely
+        axes[2].target = HOME_FOLD_ELBOW_DEG;
+        Serial.println(F("[home] staged: folding elbow"));
+    }
+    lastFrameMs = millis();
+}
+
+// Advance the staged home. No-op when IDLE. While active it OWNS the targets
+// (incoming controller frames are ignored — see applyFrame) and pets the
+// link watchdog so a quiet link can't freeze it mid-home.
+static void homeTick() {
+    if (homeState == HomeState::IDLE) return;
+    const uint8_t shoulderNow = (uint8_t)(axes[1].current + 0.5f);
+    const uint8_t elbowNow    = (uint8_t)(axes[2].current + 0.5f);
+
+    axes[0].target = KF_HOME.base;     // keep base + claw homing through every phase
+    axes[3].target = KF_HOME.claw;
+    lastFrameMs = millis();
+
+    switch (homeState) {
+        case HomeState::FOLD:
+            axes[2].target = HOME_FOLD_ELBOW_DEG;
+            if (elbowNow >= ELBOW_LIFT_SAFE_DEG) {
+                homeState = HomeState::LIFT;
+                Serial.println(F("[home] elbow folded — lifting shoulder"));
+            }
+            break;
+        case HomeState::LIFT:
+            axes[2].target = HOME_FOLD_ELBOW_DEG;          // stay tucked through the lift
+            axes[1].target = KF_HOME.shoulder;             // interlock allows it (elbow tucked)
+            if (shoulderNow <= (uint8_t)(KF_HOME.shoulder + SEQ_TOLERANCE_DEG)) {
+                homeState = HomeState::PLACE;
+                Serial.println(F("[home] shoulder up — placing elbow"));
+            }
+            break;
+        case HomeState::PLACE:
+            axes[1].target = KF_HOME.shoulder;
+            axes[2].target = KF_HOME.elbow;                // out of the zone now — safe to extend
+            if (elbowNow <= (uint8_t)(KF_HOME.elbow + SEQ_TOLERANCE_DEG)) {
+                homeState = HomeState::IDLE;
+                Serial.println(F("[home] done"));
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 // Called every time a fresh, checksum-valid frame arrives. We only update
 // the *targets* — the actual servo motion is paced by slewAndWrite().
 // Each angle is clamped on the way in so a buggy controller can't drive
@@ -332,6 +430,28 @@ static void applyFrame(const ArmProto::Frame& f) {
         }
     }
 
+    // Staged home request (FLAG_HOME). Edge-triggered so we launch once per
+    // request rather than restarting every frame in the hold window.
+    const bool homeFlag = (f.flags & ArmProto::FLAG_HOME) != 0;
+    static bool prevHomeFlag = false;
+    if (homeFlag && !prevHomeFlag) startHome();
+    prevHomeFlag = homeFlag;
+
+    if (homeState != HomeState::IDLE) {
+        // homeTick() owns the targets while a home runs. Ignore the
+        // controller's frames — it's streaming the home pose anyway — except
+        // a deliberate joystick move (once FLAG_HOME has cleared) cancels it.
+        // The flag window masks the big delta from the controller snapping
+        // itself to the home pose, so that snap doesn't read as "driving".
+        if (!homeFlag && maxDelta > SEQ_OVERRIDE_DEG) {
+            homeState = HomeState::IDLE;
+            for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
+            Serial.println(F("[home] cancelled (joystick)"));
+        }
+        lastFrameMs = millis();
+        return;
+    }
+
     if ((seqState != SeqState::IDLE || seqAutoMode) && !userIsDriving) {
         // Heartbeat from a parked controller. Two cases for ignoring it:
         //   - A sequence is running (seqTick owns the targets).
@@ -362,6 +482,25 @@ static void applyFrame(const ArmProto::Frame& f) {
 //
 // dtMs = how long it's actually been since the last tick (usually ~20 ms,
 // but using the real value keeps motion uniform if a tick gets delayed).
+// Shoulder lift interlock. Run once per tick AFTER targets are set (from a
+// BT frame, keyframe, or watchdog) and BEFORE slewAndWrite(), so it gets
+// the last word on the shoulder target. If the shoulder is down in the
+// stall zone and the elbow is NOT yet tucked back far enough, we clamp the
+// shoulder target so it can't rise (target may not drop below where the
+// shoulder currently is) — i.e. we pause the shoulder's upward motion.
+// Lowering the shoulder and moving the elbow are untouched. As soon as the
+// elbow is tucked past ELBOW_LIFT_SAFE_DEG the clamp lifts and the queued
+// upward command goes through. See SHOULDER_LIFT_GATE_DEG / interlock notes.
+static void applyShoulderLiftGate() {
+    const uint8_t shoulderNow = (uint8_t)(axes[1].current + 0.5f);  // where the shoulder actually is
+    const uint8_t elbowNow    = (uint8_t)(axes[2].current + 0.5f);  // where the elbow actually is
+    const bool inStallZone = shoulderNow >  SHOULDER_LIFT_GATE_DEG;
+    const bool elbowTucked = elbowNow    >= ELBOW_LIFT_SAFE_DEG;
+    if (inStallZone && !elbowTucked && axes[1].target < shoulderNow) {
+        axes[1].target = shoulderNow;   // veto the lift — hold until the elbow is bent back
+    }
+}
+
 static void slewAndWrite(uint32_t dtMs) {
     const float stepMax = MAX_DEG_PER_SEC * (dtMs / 1000.0f);  // max degrees we may move this tick
     for (auto& a : axes) {                                     // `auto&` = "reference to whatever's in axes[]"
@@ -462,14 +601,8 @@ void loop() {
                 Serial.println(seqAutoMode ? F("ON") : F("OFF"));
                 break;
             case 'h': case 'H':
-                // Snap targets to home. Slew + watchdog do the rest.
-                seqAbort(F("home command"));
-                axes[0].target = KF_HOME.base;
-                axes[1].target = KF_HOME.shoulder;
-                axes[2].target = KF_HOME.elbow;
-                axes[3].target = KF_HOME.claw;
-                lastFrameMs = millis();
-                Serial.println(F("[seq] homing"));
+                // Staged when the shoulder is down, straight snap otherwise.
+                startHome();
                 break;
             case '?':
                 Serial.print(F("[seq] auto="));
@@ -486,8 +619,9 @@ void loop() {
         }
     }
 
-    // 1d. Advance the pickup sequence. No-op when IDLE.
+    // 1d. Advance the pickup sequence + staged home. Both no-op when IDLE.
     seqTick();
+    homeTick();
 
     // 2. Every TICK_MS, slew the servos one step toward their targets.
     uint32_t now = millis();
@@ -502,6 +636,10 @@ void loop() {
         if (now - lastFrameMs > LINK_TIMEOUT_MS) {
             for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
         }
+
+        // Veto shoulder lifts while it's down and the elbow isn't tucked.
+        // Runs after the watchdog so a dropped link can't sneak a lift past.
+        applyShoulderLiftGate();
 
         slewAndWrite(dt);
     }

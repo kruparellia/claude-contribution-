@@ -10,7 +10,7 @@
 //   byte 2   : shoulder    (0..180)
 //   byte 3   : elbow       (0..180)
 //   byte 4   : claw        (0..180, but we'll clamp ~20..160 in firmware)
-//   byte 5   : flags       (bit0 = joystick button, rest reserved)
+//   byte 5   : flags       (bit0 = joystick button, bit1 = home request, rest reserved)
 //   byte 6   : checksum    (XOR of bytes 0..5)
 //
 // Design notes:
@@ -32,7 +32,8 @@ static constexpr uint8_t START_BYTE = 0xA5;
 static constexpr uint8_t FRAME_SIZE = 7;
 
 // Bit positions in the flags byte
-static constexpr uint8_t FLAG_BUTTON = 0x01;
+static constexpr uint8_t FLAG_BUTTON = 0x01;   // a joystick SW / pot is active
+static constexpr uint8_t FLAG_HOME   = 0x02;   // home requested — arm runs its staged home
 
 struct Frame {
     uint8_t base;

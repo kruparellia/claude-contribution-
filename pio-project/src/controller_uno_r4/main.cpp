@@ -104,14 +104,27 @@ static constexpr int16_t  POT_ARM_DELTA = 50;
 
 // Home pose — must match L_*.initial on the arm side.
 struct Pose { uint8_t base, shoulder, elbow, claw; };
-static constexpr Pose HOME { 142, 30, 113, 21 };
+static constexpr Pose HOME { 74, 68, 55, 21 };
 
 // Per-axis travel limits (defence in depth — arm side clamps too).
 struct Lim { uint8_t lo, hi; };
 static constexpr Lim L_BASE     {   0, 180 };
-static constexpr Lim L_SHOULDER {  30, 140 };
-static constexpr Lim L_ELBOW    {  30, 150 };
+static constexpr Lim L_SHOULDER {  30, 155 };
+static constexpr Lim L_ELBOW    {   0, 180 };
 static constexpr Lim L_CLAW     {  20, 160 };
+
+// Shoulder lift interlock (mirrors arm_mega's SHOULDER_LIFT_GATE_DEG /
+// ELBOW_LIFT_SAFE_DEG — keep them in sync). While the shoulder is down past
+// SHOULDER_LIFT_GATE_DEG, we refuse to integrate it back UP until the
+// commanded elbow is folded back to ELBOW_LIFT_SAFE_DEG. The up-stick input
+// is dropped rather than banked, so nothing lurches when the elbow tucks.
+static constexpr uint8_t SHOULDER_LIFT_GATE_DEG = 80;
+static constexpr uint8_t ELBOW_LIFT_SAFE_DEG    = 165;
+
+// How long after a home request we keep asserting FLAG_HOME in outgoing
+// frames, so the arm reliably catches it (over a lossy RF link) and runs
+// its staged home. Comfortably longer than a few frame periods.
+static constexpr uint32_t HOME_FLAG_HOLD_MS = 600;
 
 // Tx cadence (50 Hz to the arm, identical to original firmware).
 static constexpr uint32_t TICK_MS     = 20;
@@ -239,11 +252,18 @@ static bool pollButton(Button& btn, uint32_t now) {
     return pressedEdge;
 }
 
+// millis() until which outgoing frames assert FLAG_HOME (set by snapHome()).
+static uint32_t homeFlagUntilMs = 0;
+
 static void snapHome() {
     angBase     = HOME.base;
     angShoulder = HOME.shoulder;
     angElbow    = HOME.elbow;
     angClaw     = HOME.claw;
+    // Tell the arm to run its staged home (fold elbow -> lift shoulder ->
+    // place elbow) in case it's down in the stall zone. Harmless if it's
+    // already up: the arm just snaps straight home.
+    homeFlagUntilMs = millis() + HOME_FLAG_HOLD_MS;
     // Re-park the pot: rebase the "boot" reading to wherever the knob
     // is sitting NOW and disarm. The claw will then sit at HOME until
     // the user makes a fresh deliberate twist (>POT_ARM_DELTA from the
@@ -430,8 +450,23 @@ void loop() {
     // Makes fine positioning much easier to drive by hand.
     float j1xExpo = applyExpo(j1x, JOY_EXPO);
     float j2xExpo = applyExpo(j2x, JOY_EXPO);
-    angShoulder = clampF(angShoulder - j1xExpo * MAX_RATE * dt, L_SHOULDER.lo, L_SHOULDER.hi);
-    angElbow    = clampF(angElbow    + j2xExpo * MAX_RATE * dt, L_ELBOW.lo,    L_ELBOW.hi);
+    // Elbow first, so the shoulder interlock below sees this tick's elbow.
+    angElbow = clampF(angElbow + j2xExpo * MAX_RATE * dt, L_ELBOW.lo, L_ELBOW.hi);
+
+    // Shoulder, with the lift interlock. While the shoulder is down in the
+    // stall zone and the elbow isn't folded back yet, an UP command
+    // (decreasing angle) is simply not applied — it isn't accumulated, so
+    // there's no banked-up motion to lurch through once the elbow tucks.
+    // Lowering, and movement above the threshold, are unaffected.
+    float wantShoulder = clampF(angShoulder - j1xExpo * MAX_RATE * dt,
+                                L_SHOULDER.lo, L_SHOULDER.hi);
+    bool inStallZone = angShoulder > SHOULDER_LIFT_GATE_DEG;
+    bool elbowTucked = angElbow   >= ELBOW_LIFT_SAFE_DEG;
+    bool lifting     = wantShoulder < angShoulder;     // smaller angle = arm rising
+    if (inStallZone && !elbowTucked && lifting) {
+        wantShoulder = angShoulder;                    // veto the lift, drop the command
+    }
+    angShoulder = wantShoulder;
     (void)j1y; (void)j2y;   // Y axes intentionally unused
 
     // 5. Joystick SWs -> base rotation (held = spin, released = stop).
@@ -492,7 +527,8 @@ void loop() {
     // pot being actively turned. The arm side ignores this today but
     // it's a free debug signal.
     bool anyActive = spinCCW || spinCW || potActive;
-    f.flags = anyActive ? ArmProto::FLAG_BUTTON : 0;
+    f.flags = (anyActive ? ArmProto::FLAG_BUTTON : 0)
+            | ((now < homeFlagUntilMs) ? ArmProto::FLAG_HOME : 0);
 
     uint8_t buf[ArmProto::FRAME_SIZE];
     ArmProto::encode(f, buf);
