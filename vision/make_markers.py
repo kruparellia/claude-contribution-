@@ -11,6 +11,7 @@ Usage:
     python3 vision/make_markers.py                 # default: IDs 0..3, 25 mm
     python3 vision/make_markers.py --size 30       # 30 mm physical size
     python3 vision/make_markers.py --ids 0 1 2 7   # specific marker IDs
+    python3 vision/make_markers.py --ids 10 --size 50 --label "BASE HEADING"
 
 Each PDF page contains one marker at the requested physical size, a 25 mm
 verification ruler beside it, and an ID label.  Print at 100 % scale and
@@ -52,7 +53,7 @@ def draw_ruler(c: rl_canvas.Canvas, x_mm: float, y_mm: float, length_mm: float =
     c.setFont("Helvetica", 7)
     c.drawString(x_mm * mm, (y_mm - 3) * mm, f"verify: {length_mm} mm")
 
-def write_pdf(marker_id: int, size_mm: float, out_path: Path) -> None:
+def write_pdf(marker_id: int, size_mm: float, out_path: Path, label: str | None = None) -> None:
     c = rl_canvas.Canvas(str(out_path), pagesize=A4)
     img = make_marker_image(marker_id, size_mm)
 
@@ -73,8 +74,10 @@ def write_pdf(marker_id: int, size_mm: float, out_path: Path) -> None:
 
     # Label below.
     c.setFont("Helvetica", 10)
-    c.drawString(x_mm * mm, (y_bot_mm - 6) * mm,
-                 f"ArUco DICT_4X4_50  ID {marker_id}  {size_mm:.0f} mm")
+    spec = f"ArUco DICT_4X4_50  ID {marker_id}  {size_mm:.0f} mm"
+    if label:
+        spec = f"{label}  —  {spec}"
+    c.drawString(x_mm * mm, (y_bot_mm - 6) * mm, spec)
 
     # Reference ruler under the label so it prints alongside the marker.
     draw_ruler(c, x_mm, y_bot_mm - 14, length_mm=25)
@@ -96,6 +99,8 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--ids",  type=int, nargs="+", default=[0, 1, 2, 3])
     p.add_argument("--size", type=float, default=25.0, help="marker side length in mm")
+    p.add_argument("--label", type=str, default=None,
+                   help="optional role text printed beside the spec, e.g. 'BASE HEADING'")
     args = p.parse_args()
 
     out_dir = Path(__file__).parent / "markers"
@@ -105,7 +110,7 @@ def main() -> None:
         stem    = f"aruco_id{mid:02d}_{int(args.size)}mm"
         pdf_path = out_dir / f"{stem}.pdf"
         png_path = out_dir / f"{stem}.png"
-        write_pdf(mid, args.size, pdf_path)
+        write_pdf(mid, args.size, pdf_path, label=args.label)
         write_png(mid, args.size, png_path)
         print(f"  wrote {pdf_path}")
         print(f"  wrote {png_path}")

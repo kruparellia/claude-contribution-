@@ -58,8 +58,8 @@ static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 // Keeping them grouped means we can pass one struct around instead of
 // three loose variables, and the compiler can inline the whole thing.
 struct Limits { uint8_t lo, hi, initial; };
-static constexpr Limits LIM_BASE     {  0, 180,  74 };
-static constexpr Limits LIM_SHOULDER { 30, 155,  68 };
+static constexpr Limits LIM_BASE     {  0, 180,  90 };
+static constexpr Limits LIM_SHOULDER { 30, 155,  36 };
 static constexpr Limits LIM_ELBOW    {  0, 180,  55 };
 static constexpr Limits LIM_CLAW     { 20, 160,  21 };
 

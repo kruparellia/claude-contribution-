@@ -104,7 +104,7 @@ static constexpr int16_t  POT_ARM_DELTA = 50;
 
 // Home pose — must match L_*.initial on the arm side.
 struct Pose { uint8_t base, shoulder, elbow, claw; };
-static constexpr Pose HOME { 74, 68, 55, 21 };
+static constexpr Pose HOME { 90, 36, 55, 21 };
 
 // Per-axis travel limits (defence in depth — arm side clamps too).
 struct Lim { uint8_t lo, hi; };
