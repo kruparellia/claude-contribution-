@@ -47,6 +47,18 @@ static constexpr uint8_t SERVO_PIN_SHOULDER = 7;
 static constexpr uint8_t SERVO_PIN_ELBOW    = 11;
 static constexpr uint8_t SERVO_PIN_CLAW     = 6;
 
+// ---- E-stop rocker switch -------------------------------------------
+// A rocker switch between this pin and GND, read with the internal pull-up.
+// Wired fail-safe: the switch is CLOSED (pin pulled to GND, LOW) in the RUN
+// position, OPEN (pin floats HIGH) in the E-STOP position — so a broken wire
+// also reads HIGH and trips the stop. ESTOP_ENGAGED_LEVEL is the pin level
+// that means "stopped"; flip it to LOW if your rocker is wired the other way.
+static constexpr uint8_t ESTOP_PIN            = 2;
+static constexpr uint8_t ESTOP_ENGAGED_LEVEL  = HIGH;
+// Engaging is instant (safety); clearing must hold the RUN level this long to
+// debounce contact bounce so the arm doesn't flicker back to life.
+static constexpr uint32_t ESTOP_CLEAR_DEBOUNCE_MS = 50;
+
 // ---- Motion limits --------------------------------------------------
 // Tune these AFTER mechanical bring-up — set the lower/upper so the arm
 // cannot drive itself into its own frame. Start conservative.
@@ -257,6 +269,14 @@ static bool     seqAutoMode  = false;        // false = triggers are ignored
 // to enforce "can only enable auto mode while the controller is parked".
 static uint32_t lastControllerMoveMs = 0;
 
+// ---- E-stop state ---------------------------------------------------
+// estopEngaged is the debounced "we are stopped" flag, read all over loop().
+// When engaged the arm holds its current pose, opens the claw, and ignores
+// every motion input (Bluetooth, USB, sequence, home) until the rocker is
+// returned to RUN.
+static bool     estopEngaged   = false;
+static uint32_t estopRunSinceMs = 0;   // millis() since the pin last read RUN
+
 // True iff the controller has been parked (no over-threshold motion) for
 // CONTROLLER_IDLE_MS. Note this is also true at boot before any frame has
 // arrived — that's intentional, you can arm auto mode before powering
@@ -457,6 +477,56 @@ static void homeTick() {
             break;
         default:
             break;
+    }
+}
+
+// ---- E-stop --------------------------------------------------------------
+// Damped (soft) e-stop: rather than cutting servo power (which would let the
+// arm go limp and drop its load), we freeze every joint at its current angle
+// and open the claw. The servos stay powered and HOLD position. Because every
+// motion path on this board flows through the targets[] that loop() slews to,
+// pinning the targets here stops manual AND autonomous motion in one place.
+
+// Latch the stop: cancel any autonomous motion, drop out of auto so it can't
+// resume on its own when the rocker is released, hold the current pose, and
+// command the claw fully open. holdEstop() then keeps re-asserting this.
+static void onEstopEngage() {
+    seqAbort(F("E-STOP"));                // cancel a running pickup/grasp
+    homeState   = HomeState::IDLE;        // cancel a staged home
+    seqAutoMode = false;                  // no auto-resume after release — operator re-arms
+    for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);  // hold where we are
+    axes[3].target = LIM_CLAW.lo;         // open the claw all the way
+    Serial.println(F("[estop] ENGAGED — holding pose, claw opening, auto OFF"));
+}
+
+static void onEstopClear() {
+    // Hold position on release; control resumes normally on the next input
+    // (manual frame, or the operator re-arming auto). Pet the watchdog so a
+    // quiet link doesn't immediately re-freeze in a confusing way.
+    for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
+    lastFrameMs = millis();
+    Serial.println(F("[estop] cleared — manual control resumed (auto OFF)"));
+}
+
+// Re-assert the held pose + open claw every tick while engaged, so nothing
+// (a late BT frame, a stray target write) can sneak the arm into motion.
+static void holdEstop() {
+    for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
+    axes[3].target = LIM_CLAW.lo;         // keep the claw opening / held open
+}
+
+// Read the rocker (debounced) and fire the engage/clear edges. Engaging is
+// instant; clearing requires the RUN level to be stable for the debounce
+// window so contact bounce can't flicker the arm back to life.
+static void updateEstop() {
+    const bool stopLevel = (digitalRead(ESTOP_PIN) == ESTOP_ENGAGED_LEVEL);
+    if (stopLevel) {
+        estopRunSinceMs = millis();       // reset the "stable RUN" timer
+        if (!estopEngaged) { estopEngaged = true; onEstopEngage(); }
+    } else if (estopEngaged &&
+               (millis() - estopRunSinceMs) >= ESTOP_CLEAR_DEBOUNCE_MS) {
+        estopEngaged = false;
+        onEstopClear();
     }
 }
 
@@ -663,6 +733,13 @@ static void handleUsbCommand(char* line) {
     char cmd = *line++;
     if (cmd >= 'A' && cmd <= 'Z') cmd = (char)(cmd + 32);   // tolower
 
+    // While e-stopped, refuse everything that moves the arm. Status ('?') and
+    // the rx-debug toggle ('d') are read-only, so they're still allowed.
+    if (estopEngaged && cmd != '?' && cmd != 'd') {
+        Serial.println(F("[estop] engaged — command ignored"));
+        return;
+    }
+
     switch (cmd) {
         case 'p':
             seqStart();
@@ -746,7 +823,9 @@ static void handleUsbCommand(char* line) {
             Serial.print(F(" idx="));
             Serial.print(seqIndex);
             Serial.print(F(" atHome="));
-            Serial.println(seqAtHome() ? F("yes") : F("no"));
+            Serial.print(seqAtHome() ? F("yes") : F("no"));
+            Serial.print(F(" estop="));
+            Serial.println(estopEngaged ? F("yes") : F("no"));
             break;
         default:
             break;   // unknown command — ignore
@@ -772,6 +851,13 @@ void setup() {
     // at whatever random angle the servos last held.
     for (auto& a : axes) a.servo.write(a.lim.initial);
 
+    // E-stop rocker, read with the internal pull-up (see ESTOP_PIN notes).
+    // Seed the debounce timer + latch the initial state so we boot stopped if
+    // the rocker is already in the E-STOP position.
+    pinMode(ESTOP_PIN, INPUT_PULLUP);
+    estopRunSinceMs = millis();
+    updateEstop();
+
     // F("...") stores the string in flash (program memory) instead of RAM.
     // RAM is precious on the Mega (8 KB) — every F() saves a few bytes.
     Serial.println(F("[arm] boot OK — Serial1=HC-05@9600"));
@@ -781,13 +867,18 @@ void setup() {
 
 // Arduino calls loop() over and over, as fast as it can, forever.
 void loop() {
+    // 0. Poll the e-stop rocker first, so the rest of the loop sees a fresh
+    //    estopEngaged. When engaged it overrides everything below.
+    updateEstop();
+
     // 1. Drain the Bluetooth receive buffer. `Serial1.available()` returns
     //    how many unread bytes are sat in the UART's hardware FIFO. We
     //    feed each one to the decoder; it returns true when it has a
-    //    complete, checksum-valid 7-byte frame.
+    //    complete, checksum-valid 7-byte frame. While e-stopped we still drain
+    //    the FIFO (so it can't overflow) but ignore the frames.
     while (Serial1.available()) {
         ArmProto::Frame f;
-        if (decoder.feed((uint8_t)Serial1.read(), f)) {
+        if (decoder.feed((uint8_t)Serial1.read(), f) && !estopEngaged) {
             applyFrame(f);
         }
     }
@@ -807,9 +898,12 @@ void loop() {
         pf.shoulder = (uint8_t)(axes[1].current + 0.5f);
         pf.elbow    = (uint8_t)(axes[2].current + 0.5f);
         pf.claw     = (uint8_t)(axes[3].current + 0.5f);
+        // Mark the pose "autonomous" while e-stopped too, so the controller
+        // tracks the held pose and resumes bumplessly when the rocker clears.
         const bool autonomous = seqAutoMode
                              || homeState != HomeState::IDLE
-                             || seqState  != SeqState::IDLE;
+                             || seqState  != SeqState::IDLE
+                             || estopEngaged;
         pf.flags = autonomous ? ArmProto::FLAG_AUTO : 0;
         uint8_t pbuf[ArmProto::FRAME_SIZE];
         ArmProto::encode(pf, pbuf);
@@ -856,8 +950,11 @@ void loop() {
     }
 
     // 1d. Advance the pickup sequence + staged home. Both no-op when IDLE.
-    seqTick();
-    homeTick();
+    //     Frozen while e-stopped — holdEstop() owns the targets instead.
+    if (!estopEngaged) {
+        seqTick();
+        homeTick();
+    }
 
     // 2. Every TICK_MS, slew the servos one step toward their targets.
     uint32_t now = millis();
@@ -878,6 +975,11 @@ void loop() {
         if (!seqAutoMode && now - lastFrameMs > LINK_TIMEOUT_MS) {
             for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
         }
+
+        // E-stop has the final say on the targets: pin every joint to its
+        // current angle (hold) and keep the claw opening. Runs after the
+        // watchdog so nothing else can move the arm while engaged.
+        if (estopEngaged) holdEstop();
 
         // Veto shoulder lifts while it's down and the elbow isn't tucked.
         // Runs after the watchdog so a dropped link can't sneak a lift past.
