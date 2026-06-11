@@ -61,7 +61,26 @@ struct Limits { uint8_t lo, hi, initial; };
 static constexpr Limits LIM_BASE     {  0, 180,  90 };
 static constexpr Limits LIM_SHOULDER { 30, 155,  36 };
 static constexpr Limits LIM_ELBOW    {  0, 180,  55 };
-static constexpr Limits LIM_CLAW     { 20, 160,  21 };
+static constexpr Limits LIM_CLAW     {  5, 160,   5 };  // claw OPENS toward lo; home (5) = fully open
+
+// ---- Hover pose -----------------------------------------------------
+// Where the USB 'v' command parks the arm to hover over the pickup zone,
+// before the Pi visual-servos the base onto the rock. SET shoulder/elbow/
+// claw BY JOGGING the arm to a good hover (claw centred over the pickup
+// zone, OPEN, at a safe height above the rock) and reading the live "[pos]"
+// line off USB — exactly how HOME was set. The `base` field is IGNORED:
+// 'v' deliberately leaves the base where it is so the servo loop can aim it
+// (the field only exists to fill out the Pose struct). Kept here, NOT in
+// keyframes.h, so record_keyframes.py can't overwrite it.
+//
+// Jogged on the rig 2026-06-10: claw open over the pickup zone at grasp-clear
+// height. base (90) is ignored. NOTE: shoulder=97 sits in the stall zone
+// (> SHOULDER_LIFT_GATE_DEG) with the elbow extended — this is the reach
+// needed to get over the rock, but it's the high-torque cantilever pose, so
+// watch for a shoulder stall / rail brown-out if it's held a long time during
+// the base-servo loop. Raise the hover (lower shoulder angle / fold elbow) if
+// it stalls.
+static constexpr Pose HOVER { 90, 97, 28, 21 };
 
 // Max angular speed per servo. 60 deg/s is well below MG996R stall current
 // even at the shoulder's worst-case lever arm (arm fully extended), which
@@ -131,6 +150,15 @@ static constexpr uint8_t  SEQ_HOME_TOL_DEG  = 5;
 // the controller side, so maxDelta is genuinely 0 when nobody's
 // touching it).
 static constexpr uint8_t  SEQ_OVERRIDE_DEG  = 0;
+// A real manual takeover must be SUSTAINED for this many consecutive driving
+// frames before it kicks the arm out of auto mode / cancels a home / aborts a
+// sequence. With SEQ_OVERRIDE_DEG = 0, a single degree of BT jitter reads as
+// "driving"; without this debounce that transient noise knocks auto mode off
+// the instant the Pi enables it (and stomps Pi-set targets), so home/hover
+// never run. A genuine stick push lasts many frames; jitter is 1-2. At 50 Hz,
+// 3 frames = 60 ms — well below human reaction, so manual override still feels
+// instant, but isolated noise is ignored.
+static constexpr uint8_t  MANUAL_OVERRIDE_FRAMES = 3;
 // The controller is considered "idle" (no joystick movement) once this
 // much time has passed since the last frame whose delta exceeded
 // SEQ_OVERRIDE_DEG. Used to gate entry into auto mode — we refuse 'a' to
@@ -174,6 +202,17 @@ AxisState axes[] = {
 uint32_t lastFrameMs  = 0;   // when we last received a valid frame — fed the watchdog
 uint32_t lastTickMs   = 0;   // when we last ran the slew/write step
 uint32_t lastPosLogMs = 0;   // when we last printed servo positions
+
+// ---- RX debug (TEMPORARY — diagnosing the controller "always driving" bug).
+// Captures the last received frame + whether it read as "driving", and a
+// per-interval frame/driving tally, dumped at 2 Hz as [rx] lines. Toggle with
+// USB 'd'. Remove once the drift source is found.
+static ArmProto::Frame g_lastRx { 0, 0, 0, 0, 0 };
+static uint8_t  g_lastMaxDelta = 0;
+static uint16_t g_rxCount      = 0;
+static uint16_t g_drvCount     = 0;
+static uint32_t g_lastRxDbgMs  = 0;
+static bool     g_rxDebug      = true;
 
 // ---------------------------------------------------------------------
 // Squash a value into the [lo, hi] range. `inline` hints the compiler to
@@ -404,10 +443,14 @@ static void applyFrame(const ArmProto::Frame& f) {
         uint8_t d = a > b ? a - b : b - a;
         if (d > maxDelta) maxDelta = d;
     };
+    // Claw is deliberately EXCLUDED from the takeover check: it's pot-driven
+    // and the pot is electrically noisy (jitters ±3), so counting it would
+    // keep reading "driving" and lock the arm out of auto mode. The claw is
+    // Pi-controlled during the auto pickup anyway, and you take manual control
+    // by moving a stick/base (still detected below) — not by nudging the claw.
     check(f.base,     prev.base);
     check(f.shoulder, prev.shoulder);
     check(f.elbow,    prev.elbow);
-    check(f.claw,     prev.claw);
     prev = f;
 
     // Angle delta catches stick deflection + sustained button presses
@@ -415,14 +458,42 @@ static void applyFrame(const ArmProto::Frame& f) {
     // cases: a button tap so brief it didn't yet advance the base by a
     // full degree, or pot activity that hasn't moved the rounded claw
     // value yet. Either is enough to count as "user touched something".
-    bool userIsDriving = (maxDelta > SEQ_OVERRIDE_DEG)
-                      || (f.flags & ArmProto::FLAG_BUTTON);
+    // FLAG_BUTTON is deliberately NOT part of "driving". The controller sets
+    // it whenever the claw pot reads "active", and a NOISY pot keeps it
+    // asserted every frame even when untouched — which would peg userIsDriving
+    // and lock the arm out of auto mode (observed: claw jitter ±3, BTN=1 on
+    // every frame, base/shoulder/elbow dead-stable). Genuine input still
+    // registers via maxDelta — a held base button spins the base, a real claw
+    // turn moves the claw angle — and the streak debounce below filters the
+    // isolated single-frame pot-jitter spikes. (Proper cure is controller-side:
+    // raise POT_NOISE / smooth the pot so it stops reading active from noise.)
+    bool userIsDriving = (maxDelta > SEQ_OVERRIDE_DEG);
 
-    // Stamp the last-move timestamp + kick auto mode OFF the moment the
-    // user touches the sticks. The 'a' command consults controllerIdle()
-    // (set by the stamp below) before allowing auto to be re-enabled, so
-    // you can't arm a sequence while you're still driving manually.
+    // RX debug capture (temporary).
+    g_lastRx = f;
+    g_lastMaxDelta = maxDelta;
+    g_rxCount++;
+    if (userIsDriving) g_drvCount++;
+
+    // Debounce "driving" into a SUSTAINED manual takeover. With
+    // SEQ_OVERRIDE_DEG = 0 a single degree of BT jitter reads as driving; if
+    // that transient noise were allowed to act, it would knock auto mode off
+    // the instant the Pi enables it and let the controller frame stomp the
+    // Pi's home/hover target — so nothing moves in auto. drivingStreak counts
+    // consecutive driving frames and resets on the first still frame; only a
+    // streak of MANUAL_OVERRIDE_FRAMES is a genuine takeover. A real stick
+    // push lasts many frames; jitter is 1-2, so it's filtered out.
+    static uint8_t drivingStreak = 0;
     if (userIsDriving) {
+        if (drivingStreak < 255) drivingStreak++;
+    } else {
+        drivingStreak = 0;
+    }
+    const bool manualTakeover = drivingStreak >= MANUAL_OVERRIDE_FRAMES;
+
+    // On a genuine takeover, stamp the move time + hand control back: kick
+    // auto mode OFF so the operator's joystick drives again.
+    if (manualTakeover) {
         lastControllerMoveMs = millis();
         if (seqAutoMode) {
             seqAutoMode = false;
@@ -438,12 +509,10 @@ static void applyFrame(const ArmProto::Frame& f) {
     prevHomeFlag = homeFlag;
 
     if (homeState != HomeState::IDLE) {
-        // homeTick() owns the targets while a home runs. Ignore the
-        // controller's frames — it's streaming the home pose anyway — except
-        // a deliberate joystick move (once FLAG_HOME has cleared) cancels it.
-        // The flag window masks the big delta from the controller snapping
-        // itself to the home pose, so that snap doesn't read as "driving".
-        if (!homeFlag && maxDelta > SEQ_OVERRIDE_DEG) {
+        // homeTick() owns the targets while a home runs. Only a SUSTAINED
+        // joystick move (not a jitter blip) once FLAG_HOME has cleared
+        // cancels it — otherwise BT noise would abort the auto-home.
+        if (!homeFlag && manualTakeover) {
             homeState = HomeState::IDLE;
             for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
             Serial.println(F("[home] cancelled (joystick)"));
@@ -452,16 +521,11 @@ static void applyFrame(const ArmProto::Frame& f) {
         return;
     }
 
-    if ((seqState != SeqState::IDLE || seqAutoMode) && !userIsDriving) {
-        // Heartbeat from a parked controller. Two cases for ignoring it:
-        //   - A sequence is running (seqTick owns the targets).
-        //   - Auto mode is armed (Pi is in charge; the controller's
-        //     unchanging command stream must not stomp Pi-set targets
-        //     like 'h' or a pickup keyframe).
-        // Either way, pet the BT-link watchdog so it doesn't freeze the
-        // arm, but leave targets alone. As soon as a stick is moved
-        // (userIsDriving = true), the block above turns auto OFF and
-        // execution falls through to apply the new frame normally.
+    if ((seqState != SeqState::IDLE || seqAutoMode) && !manualTakeover) {
+        // Heartbeat OR transient jitter from the controller while a sequence
+        // runs or auto mode is armed: ignore it (seqTick / the Pi own the
+        // targets), just pet the BT-link watchdog so it doesn't freeze us.
+        // Only a sustained manual takeover falls through to hand control back.
         lastFrameMs = millis();
         return;
     }
@@ -532,6 +596,117 @@ static void logPositions() {
 }
 
 // ---------------------------------------------------------------------
+// USB serial command surface. One newline-terminated line per command,
+// mirroring the controller's `pumpSerialCommands()` parser so both
+// firmwares speak the same way (and so `b<deg>` can carry a multi-digit
+// argument that a bare-char reader couldn't).
+//
+//   p          pickup sequence            x   abort
+//   h          staged home                a   toggle auto mode
+//   ?          status dump
+//   v          hover: lift to the approach pose, leaving base untouched
+//   b<deg>     set base angle absolutely  (Pi visual-servo nudge)
+//
+// 'v' and 'b<deg>' are the visual-servo primitives: the Pi sends 'v' to
+// raise the arm into the hover pose over the pickup zone, then streams
+// 'b<deg>' to swing the base until the claw is on the rock's bearing,
+// then 'p' to grasp. Both are auto-mode-only and refuse while a sequence
+// or staged home owns the joints — so they can't fight those motions.
+static char    usbBuf[16];
+static uint8_t usbLen = 0;
+
+static void handleUsbCommand(char* line) {
+    while (*line == ' ' || *line == '\t') ++line;       // strip leading space
+    if (*line == '\0') return;                          // blank line — ignore
+    char cmd = *line++;
+    if (cmd >= 'A' && cmd <= 'Z') cmd = (char)(cmd + 32);   // tolower
+
+    switch (cmd) {
+        case 'p':
+            seqStart();
+            break;
+        case 'x':
+            seqAbort(F("user 'x'"));
+            break;
+        case 'a':
+            // Turning auto OFF is always safe. Turning it ON requires the
+            // controller to have been parked for CONTROLLER_IDLE_MS — stops
+            // you arming the arm while a stick is still deflected, which the
+            // next BT frame would otherwise read as "driving" and flip auto
+            // straight back off.
+            if (!seqAutoMode && !controllerIdle()) {
+                Serial.println(F("[seq] cannot arm — controller still moving"));
+                break;
+            }
+            seqAutoMode = !seqAutoMode;
+            Serial.print(F("[seq] auto mode "));
+            Serial.println(seqAutoMode ? F("ON") : F("OFF"));
+            // Entering auto homes the arm (claw included) so it always starts
+            // from a known pose — you no longer have to home it by hand first.
+            // Staged when the shoulder is down, a straight snap otherwise.
+            if (seqAutoMode) startHome();
+            break;
+        case 'h':
+            // Staged when the shoulder is down, straight snap otherwise.
+            startHome();
+            break;
+        case 'v':
+            // Hover pose: shoulder/elbow/claw to the jogged HOVER pose, base
+            // deliberately left where it is so the Pi can aim it next.
+            if (!seqAutoMode) {
+                Serial.println(F("[hover] auto OFF — type 'a' first"));
+                break;
+            }
+            if (seqState != SeqState::IDLE || homeState != HomeState::IDLE) {
+                Serial.println(F("[hover] busy"));
+                break;
+            }
+            axes[1].target = clampTo(HOVER.shoulder, axes[1].lim);
+            axes[2].target = clampTo(HOVER.elbow,    axes[2].lim);
+            axes[3].target = clampTo(HOVER.claw,     axes[3].lim);
+            lastFrameMs = millis();            // pet the watchdog — Pi is driving
+            Serial.println(F("[hover] pose"));
+            break;
+        case 'b': {
+            // Absolute base angle from the Pi visual-servo loop. atoi reads
+            // the integer after the 'b'; constrain before the uint8_t cast so
+            // a stray negative can't wrap up to a huge angle.
+            if (!seqAutoMode) {
+                Serial.println(F("[base] auto OFF — type 'a' first"));
+                break;
+            }
+            if (seqState != SeqState::IDLE || homeState != HomeState::IDLE) {
+                Serial.println(F("[base] busy"));
+                break;
+            }
+            int deg = constrain(atoi(line), 0, 180);
+            axes[0].target = clampTo((uint8_t)deg, axes[0].lim);
+            lastFrameMs = millis();            // pet the watchdog — Pi is driving
+            Serial.print(F("[base] target="));
+            Serial.println(axes[0].target);
+            break;
+        }
+        case 'd':
+            g_rxDebug = !g_rxDebug;
+            Serial.print(F("[rx] debug "));
+            Serial.println(g_rxDebug ? F("ON") : F("OFF"));
+            break;
+        case '?':
+            Serial.print(F("[seq] auto="));
+            Serial.print(seqAutoMode ? F("ON") : F("OFF"));
+            Serial.print(F(" state="));
+            Serial.print((uint8_t)seqState);
+            Serial.print(F(" idx="));
+            Serial.print(seqIndex);
+            Serial.print(F(" atHome="));
+            Serial.println(seqAtHome() ? F("yes") : F("no"));
+            break;
+        default:
+            break;   // unknown command — ignore
+    }
+}
+
+// ---------------------------------------------------------------------
 // Arduino calls setup() once at power-on / after reset.
 void setup() {
     Serial.begin(115200);          // USB — debug log (visible in `pio device monitor`)
@@ -572,50 +747,64 @@ void loop() {
 
     logPositions();
 
-    // 1c. USB serial commands — test triggers + mode toggle. Each char
-    //     is a single keystroke from `pio device monitor`. No newline
-    //     required, so you can drive the sequence with bare letters.
-    //       p  pickup    a  toggle auto mode    h  home
-    //       x  abort     ?  status dump
+    // Pose report back to the controller (bumpless handoff). At ~15 Hz, send
+    // our actual current pose over the HC-05 with FLAG_AUTO set whenever the
+    // arm is driving itself, so the controller can track us and a switch back
+    // to manual doesn't jump. The HC-05 SPP link is full-duplex, so this
+    // shares the wire with the controller's command stream fine.
+    static uint32_t lastPoseTxMs = 0;
+    if (millis() - lastPoseTxMs >= 66) {
+        lastPoseTxMs = millis();
+        ArmProto::Frame pf;
+        pf.base     = (uint8_t)(axes[0].current + 0.5f);
+        pf.shoulder = (uint8_t)(axes[1].current + 0.5f);
+        pf.elbow    = (uint8_t)(axes[2].current + 0.5f);
+        pf.claw     = (uint8_t)(axes[3].current + 0.5f);
+        const bool autonomous = seqAutoMode
+                             || homeState != HomeState::IDLE
+                             || seqState  != SeqState::IDLE;
+        pf.flags = autonomous ? ArmProto::FLAG_AUTO : 0;
+        uint8_t pbuf[ArmProto::FRAME_SIZE];
+        ArmProto::encode(pf, pbuf);
+        Serial1.write(pbuf, ArmProto::FRAME_SIZE);
+    }
+
+    // RX debug dump (temporary) — n=frames this interval, drv=how many read as
+    // "driving", then the last frame's angles + decoded flags. n=0 means no BT
+    // frames arrived (controller off / unpaired).
+    if (g_rxDebug && millis() - g_lastRxDbgMs >= 500) {
+        g_lastRxDbgMs = millis();
+        Serial.print(F("[rx] n="));     Serial.print(g_rxCount);
+        Serial.print(F(" drv="));       Serial.print(g_drvCount);
+        Serial.print(F(" b="));         Serial.print(g_lastRx.base);
+        Serial.print(F(" s="));         Serial.print(g_lastRx.shoulder);
+        Serial.print(F(" e="));         Serial.print(g_lastRx.elbow);
+        Serial.print(F(" c="));         Serial.print(g_lastRx.claw);
+        Serial.print(F(" flags="));     Serial.print(g_lastRx.flags);
+        Serial.print(F(" BTN="));       Serial.print((g_lastRx.flags & ArmProto::FLAG_BUTTON) ? 1 : 0);
+        Serial.print(F(" HOME="));      Serial.print((g_lastRx.flags & ArmProto::FLAG_HOME) ? 1 : 0);
+        Serial.print(F(" maxd="));      Serial.println(g_lastMaxDelta);
+        g_rxCount = 0; g_drvCount = 0;
+    }
+
+    // 1c. USB serial commands. One newline-terminated line each (a bare
+    //     "p\n", or "b120\n" with an argument) — see handleUsbCommand().
+    //     Accumulate bytes into usbBuf until CR/LF, then dispatch. Lines
+    //     longer than the buffer are dropped and resync at the next newline.
     while (Serial.available()) {
-        char c = (char)Serial.read();
-        switch (c) {
-            case 'p': case 'P':
-                seqStart();
-                break;
-            case 'x': case 'X':
-                seqAbort(F("user 'x'"));
-                break;
-            case 'a': case 'A':
-                // Turning auto OFF is always allowed (safe). Turning it
-                // ON requires the controller to have been idle for
-                // CONTROLLER_IDLE_MS — prevents arming the arm while a
-                // stick is still deflected, which would otherwise cause
-                // the very next BT frame to flip auto right back off.
-                if (!seqAutoMode && !controllerIdle()) {
-                    Serial.println(F("[seq] cannot arm — controller still moving"));
-                    break;
-                }
-                seqAutoMode = !seqAutoMode;
-                Serial.print(F("[seq] auto mode "));
-                Serial.println(seqAutoMode ? F("ON") : F("OFF"));
-                break;
-            case 'h': case 'H':
-                // Staged when the shoulder is down, straight snap otherwise.
-                startHome();
-                break;
-            case '?':
-                Serial.print(F("[seq] auto="));
-                Serial.print(seqAutoMode ? F("ON") : F("OFF"));
-                Serial.print(F(" state="));
-                Serial.print((uint8_t)seqState);
-                Serial.print(F(" idx="));
-                Serial.print(seqIndex);
-                Serial.print(F(" atHome="));
-                Serial.println(seqAtHome() ? F("yes") : F("no"));
-                break;
-            default:
-                break;  // ignore — newlines, whitespace, typos
+        int ci = Serial.read();
+        if (ci < 0) break;
+        char c = (char)ci;
+        if (c == '\r' || c == '\n') {
+            if (usbLen > 0) {
+                usbBuf[usbLen] = '\0';
+                handleUsbCommand(usbBuf);
+                usbLen = 0;
+            }
+        } else if (usbLen < sizeof(usbBuf) - 1) {
+            usbBuf[usbLen++] = c;
+        } else {
+            usbLen = 0;     // overflow — drop and resync at next newline
         }
     }
 
@@ -633,7 +822,13 @@ void loop() {
         // pretend the target is wherever we currently are. The slew step
         // then has zero error, so the arm stops mid-motion instead of
         // sailing on toward the last received target.
-        if (now - lastFrameMs > LINK_TIMEOUT_MS) {
+        //
+        // Suppressed in auto mode: there the Pi (over USB) is the command
+        // authority, not the BT link, and a Pi-set target ('v'/'b'/keyframe)
+        // can take longer than LINK_TIMEOUT_MS to slew to. We must not freeze
+        // it just because the controller is parked or powered off. There's no
+        // runaway risk — in auto mode the BT frames aren't driving the arm.
+        if (!seqAutoMode && now - lastFrameMs > LINK_TIMEOUT_MS) {
             for (auto& a : axes) a.target = (uint8_t)(a.current + 0.5f);
         }
 

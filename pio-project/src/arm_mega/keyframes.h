@@ -21,7 +21,7 @@ struct Pose {
 };
 
 // Home pose — must match LIM_*.initial in main.cpp.
-static constexpr Pose KF_HOME { 90, 36, 55, 21 };
+static constexpr Pose KF_HOME { 90, 36, 55, 5 };
 
 static constexpr Pose KF_APPROACH     { 142, 30, 113,  21 };
 static constexpr Pose KF_GRASP_DOWN   { 142, 30, 113,  21 };

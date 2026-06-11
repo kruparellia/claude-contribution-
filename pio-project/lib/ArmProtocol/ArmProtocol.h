@@ -31,9 +31,15 @@ namespace ArmProto {
 static constexpr uint8_t START_BYTE = 0xA5;
 static constexpr uint8_t FRAME_SIZE = 7;
 
-// Bit positions in the flags byte
+// Bit positions in the flags byte.
+// Controller -> arm direction:
 static constexpr uint8_t FLAG_BUTTON = 0x01;   // a joystick SW / pot is active
 static constexpr uint8_t FLAG_HOME   = 0x02;   // home requested — arm runs its staged home
+// Arm -> controller direction (the reverse pose-report stream, for bumpless
+// handoff): set when the arm is driving ITSELF (auto mode / staged home /
+// pickup sequence), telling the controller to track the reported pose so a
+// switch back to manual doesn't jump.
+static constexpr uint8_t FLAG_AUTO   = 0x04;
 
 struct Frame {
     uint8_t base;

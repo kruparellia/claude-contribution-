@@ -104,14 +104,14 @@ static constexpr int16_t  POT_ARM_DELTA = 50;
 
 // Home pose — must match L_*.initial on the arm side.
 struct Pose { uint8_t base, shoulder, elbow, claw; };
-static constexpr Pose HOME { 90, 36, 55, 21 };
+static constexpr Pose HOME { 90, 36, 55, 5 };
 
 // Per-axis travel limits (defence in depth — arm side clamps too).
 struct Lim { uint8_t lo, hi; };
 static constexpr Lim L_BASE     {   0, 180 };
 static constexpr Lim L_SHOULDER {  30, 155 };
 static constexpr Lim L_ELBOW    {   0, 180 };
-static constexpr Lim L_CLAW     {  20, 160 };
+static constexpr Lim L_CLAW     {   5, 160 };  // claw OPENS toward lo (5=open, 160=closed); matches arm LIM_CLAW
 
 // Shoulder lift interlock (mirrors arm_mega's SHOULDER_LIFT_GATE_DEG /
 // ELBOW_LIFT_SAFE_DEG — keep them in sync). While the shoulder is down past
@@ -142,9 +142,10 @@ static constexpr uint32_t PRINT_MS    = 200;
 // ---- Joystick & button state --------------------------------------
 struct Stick {
     uint8_t pinVrx, pinVry;
+    int16_t cenX, cenY;     // measured neutral readings, set by calibrateSticks()
 };
-Stick stick1 { PIN_J1_VRX, PIN_J1_VRY };
-Stick stick2 { PIN_J2_VRX, PIN_J2_VRY };
+Stick stick1 { PIN_J1_VRX, PIN_J1_VRY, JOY_CENTER, JOY_CENTER };
+Stick stick2 { PIN_J2_VRX, PIN_J2_VRY, JOY_CENTER, JOY_CENTER };
 
 // Debounced push-button (only used here for the joystick SWs).
 struct Button {
@@ -161,6 +162,13 @@ float angBase     = HOME.base;
 float angShoulder = HOME.shoulder;
 float angElbow    = HOME.elbow;
 float angClaw     = HOME.claw;
+
+// Reverse link from the arm: it reports its live pose (see FLAG_AUTO) so we can
+// mirror it for a bumpless handoff. armAuto = the arm is driving itself now.
+ArmProto::Decoder armDecoder;
+ArmProto::Frame   armPose { HOME.base, HOME.shoulder, HOME.elbow, HOME.claw, 0 };
+bool     armAuto     = false;
+uint32_t lastArmRxMs = 0;
 
 uint32_t lastTickMs = 0;
 
@@ -205,12 +213,14 @@ static char    cmdBuf[16];
 static uint8_t cmdLen = 0;
 
 // -------------------------------------------------------------------
-// Deadzone helper — same as original. Maps 0..1023 ADC to -1..+1 with
-// a flat zero zone around 512.
-static inline float applyDeadzone(int16_t raw) {
-    int16_t d = raw - JOY_CENTER;
-    if (d >  JOY_DEADZONE) return float(d - JOY_DEADZONE) / (1023 - JOY_CENTER - JOY_DEADZONE);
-    if (d < -JOY_DEADZONE) return float(d + JOY_DEADZONE) / (JOY_CENTER - JOY_DEADZONE);
+// Deadzone helper. Maps 0..1023 ADC to -1..+1 with a flat zero zone around
+// the axis's MEASURED neutral `center` (set at boot by calibrateSticks), so a
+// stick that rests a few tens of counts off 512 still reads exactly 0 when
+// untouched — no creep. Scaled per-side so full deflection still reaches ±1.
+static inline float applyDeadzone(int16_t raw, int16_t center) {
+    int16_t d = raw - center;
+    if (d >  JOY_DEADZONE) return float(d - JOY_DEADZONE) / float(1023 - center - JOY_DEADZONE);
+    if (d < -JOY_DEADZONE) return float(d + JOY_DEADZONE) / float(center - JOY_DEADZONE);
     return 0.0f;
 }
 
@@ -231,8 +241,8 @@ static inline float applyExpo(float v, float k) {
 // In this variant we only care about each stick's Y axis. We still read
 // X so it can be logged for debugging, but it doesn't feed the angles.
 static void readStick(const Stick& s, float& outX, float& outY) {
-    outX = applyDeadzone(analogRead(s.pinVrx));
-    outY = applyDeadzone(analogRead(s.pinVry));
+    outX = applyDeadzone(analogRead(s.pinVrx), s.cenX);
+    outY = applyDeadzone(analogRead(s.pinVry), s.cenY);
 }
 
 // Poll a debounced push-button. Returns true ONCE on the press edge,
@@ -382,6 +392,34 @@ static inline float potToClawDeg(int16_t raw) {
     return float(L_CLAW.lo) + t * float(L_CLAW.hi - L_CLAW.lo);
 }
 
+// ---- Boot-time joystick centre calibration --------------------------
+// Sticks rarely rest at exactly 512 — a few tens of counts of bias is normal,
+// and with a FIXED centre that bias sits outside the deadzone so the rate
+// integrator creeps the commanded angle forever. On the arm that continuous
+// "drift" reads as the user driving and kicks it out of auto mode. So at boot
+// — sticks assumed untouched — we measure each axis's true neutral and
+// deadzone around THAT. A wildly off reading (a held stick or a floating pin)
+// is rejected back to the nominal 512 so we never end up worse than before.
+static int16_t measureCentre(uint8_t pin) {
+    long sum = 0;
+    for (uint8_t i = 0; i < 32; ++i) { sum += analogRead(pin); delay(2); }
+    int16_t c = (int16_t)(sum / 32);
+    if (c < JOY_CENTER - 150 || c > JOY_CENTER + 150) return JOY_CENTER;
+    return c;
+}
+
+static void calibrateSticks() {
+    stick1.cenX = measureCentre(stick1.pinVrx);
+    stick1.cenY = measureCentre(stick1.pinVry);
+    stick2.cenX = measureCentre(stick2.pinVrx);
+    stick2.cenY = measureCentre(stick2.pinVry);
+    Serial.print(F("[ctl] stick centres  J1("));
+    Serial.print(stick1.cenX); Serial.print(','); Serial.print(stick1.cenY);
+    Serial.print(F(")  J2("));
+    Serial.print(stick2.cenX); Serial.print(','); Serial.print(stick2.cenY);
+    Serial.println(')');
+}
+
 // -------------------------------------------------------------------
 void setup() {
     pinMode(PIN_J1_SW, INPUT_PULLUP);
@@ -392,6 +430,11 @@ void setup() {
     Serial1.begin(9600);     // hardware UART -> HC-05 master
     Serial.println(F("[ctl] boot OK — sticks=shoulder/elbow, SW=base spin, pot=claw"));
     Serial.println(F("[ctl] cmds: h=home  b<deg>=base  s<deg>=shoulder  e<deg>=elbow  c<deg>=claw"));
+
+    // Measure each stick's neutral so an off-centre rest position can't creep
+    // the commanded angle (which the arm reads as a manual override and uses
+    // to drop out of auto mode). Keep the sticks untouched through boot.
+    calibrateSticks();
 
     // Seed the pot state with the current knob position so we don't
     // see a spurious "knob moved" on the very first tick. Also remember
@@ -422,6 +465,17 @@ void loop() {
         }
     }
 
+    // 1b. Drain the arm's reverse pose-report stream (bumpless handoff). Keep
+    //     the latest decoded pose + whether the arm is currently autonomous.
+    while (Serial1.available()) {
+        ArmProto::Frame rf;
+        if (armDecoder.feed((uint8_t)Serial1.read(), rf)) {
+            armPose     = rf;
+            armAuto     = (rf.flags & ArmProto::FLAG_AUTO) != 0;
+            lastArmRxMs = now;
+        }
+    }
+
     // 2. Drain USB Serial for calibration/homing commands. Recognised:
     //      h           -> snap to home pose (only path to home this firmware)
     //      b/s/e/c <n> -> jump that joint to <n> degrees, clamped to limits
@@ -439,45 +493,55 @@ void loop() {
     float dt = (now - lastTickMs) / 1000.0f;
     lastTickMs = now;
 
-    // 4. Joysticks -> shoulder + elbow (X inverted so pushing the stick
-    //    UP decreases the joint angle, matching arm-mounted-in-front feel).
+    // 4. Read sticks + base buttons. (X inverted so pushing the stick UP
+    //    decreases the joint angle, matching arm-mounted-in-front feel.)
     float j1x, j1y, j2x, j2y;
     readStick(stick1, j1x, j1y);
     readStick(stick2, j2x, j2y);
-
-    // Expo curve before integration: small stick deflections produce
-    // gentle motion, only the last bit of throw gives full MAX_RATE.
-    // Makes fine positioning much easier to drive by hand.
-    float j1xExpo = applyExpo(j1x, JOY_EXPO);
-    float j2xExpo = applyExpo(j2x, JOY_EXPO);
-    // Elbow first, so the shoulder interlock below sees this tick's elbow.
-    angElbow = clampF(angElbow + j2xExpo * MAX_RATE * dt, L_ELBOW.lo, L_ELBOW.hi);
-
-    // Shoulder, with the lift interlock. While the shoulder is down in the
-    // stall zone and the elbow isn't folded back yet, an UP command
-    // (decreasing angle) is simply not applied — it isn't accumulated, so
-    // there's no banked-up motion to lurch through once the elbow tucks.
-    // Lowering, and movement above the threshold, are unaffected.
-    float wantShoulder = clampF(angShoulder - j1xExpo * MAX_RATE * dt,
-                                L_SHOULDER.lo, L_SHOULDER.hi);
-    bool inStallZone = angShoulder > SHOULDER_LIFT_GATE_DEG;
-    bool elbowTucked = angElbow   >= ELBOW_LIFT_SAFE_DEG;
-    bool lifting     = wantShoulder < angShoulder;     // smaller angle = arm rising
-    if (inStallZone && !elbowTucked && lifting) {
-        wantShoulder = angShoulder;                    // veto the lift, drop the command
-    }
-    angShoulder = wantShoulder;
-    (void)j1y; (void)j2y;   // Y axes intentionally unused
-
-    // 5. Joystick SWs -> base rotation (held = spin, released = stop).
-    //    If both SWs are held the rotations cancel — fine, it's an
-    //    obvious user mistake rather than something to silently arbitrate.
     bool spinCW  = (btnJ1Sw.state == LOW);
     bool spinCCW = (btnJ2Sw.state == LOW);
-    float baseDelta = 0.0f;
-    if (spinCCW) baseDelta -= BASE_RATE * dt;
-    if (spinCW)  baseDelta += BASE_RATE * dt;
-    angBase = clampF(angBase + baseDelta, L_BASE.lo, L_BASE.hi);
+    (void)j1y; (void)j2y;   // Y axes intentionally unused
+
+    // Bumpless handoff: while the arm is driving itself (armAuto) and we're not
+    // touching anything locally, MIRROR its reported pose instead of holding
+    // our own stale one — so taking back manual control starts from where the
+    // arm actually is, with no jump. Any local input drops us straight back to
+    // normal integration (and the arm, seeing movement, leaves auto). The claw
+    // stays pot-driven either way. (applyDeadzone returns exactly 0 at rest.)
+    bool localDriving = (j1x != 0.0f) || (j2x != 0.0f) || spinCW || spinCCW;
+    bool armFresh     = (now - lastArmRxMs) < 500;
+    if (armAuto && armFresh && !localDriving) {
+        angBase     = armPose.base;
+        angShoulder = armPose.shoulder;
+        angElbow    = armPose.elbow;
+    } else {
+        // Normal manual integration. Expo curve first: small stick deflections
+        // produce gentle motion, only the last bit of throw gives full MAX_RATE.
+        float j1xExpo = applyExpo(j1x, JOY_EXPO);
+        float j2xExpo = applyExpo(j2x, JOY_EXPO);
+        // Elbow first, so the shoulder interlock below sees this tick's elbow.
+        angElbow = clampF(angElbow + j2xExpo * MAX_RATE * dt, L_ELBOW.lo, L_ELBOW.hi);
+
+        // Shoulder, with the lift interlock. While the shoulder is down in the
+        // stall zone and the elbow isn't folded back yet, an UP command
+        // (decreasing angle) is simply not applied. Lowering, and movement
+        // above the threshold, are unaffected.
+        float wantShoulder = clampF(angShoulder - j1xExpo * MAX_RATE * dt,
+                                    L_SHOULDER.lo, L_SHOULDER.hi);
+        bool inStallZone = angShoulder > SHOULDER_LIFT_GATE_DEG;
+        bool elbowTucked = angElbow   >= ELBOW_LIFT_SAFE_DEG;
+        bool lifting     = wantShoulder < angShoulder;   // smaller angle = arm rising
+        if (inStallZone && !elbowTucked && lifting) {
+            wantShoulder = angShoulder;                  // veto the lift
+        }
+        angShoulder = wantShoulder;
+
+        // Base rotation: joystick SWs held = spin (both held = cancel).
+        float baseDelta = 0.0f;
+        if (spinCCW) baseDelta -= BASE_RATE * dt;
+        if (spinCW)  baseDelta += BASE_RATE * dt;
+        angBase = clampF(angBase + baseDelta, L_BASE.lo, L_BASE.hi);
+    }
 
     // 6. Claw potentiometer -> claw angle, but only while the knob is
     //    actively being turned.
