@@ -95,16 +95,65 @@ def write_png(marker_id: int, size_mm: float, out_path: Path) -> None:
     img = make_marker_image(marker_id, size_mm)
     img.save(out_path, dpi=(DPI, DPI))      # DPI metadata so naive PNG prints don't scale
 
+def write_sheet(ids: list[int], size_mm: float, out_path: Path,
+                label: str | None = None) -> None:
+    """Tile every requested marker on ONE A4 page in a grid — handy for small
+    markers (e.g. 20 mm claw-tip tags) so you print and cut them together."""
+    c = rl_canvas.Canvas(str(out_path), pagesize=A4)
+    page_w_mm, page_h_mm = A4[0] / mm, A4[1] / mm
+    margin_mm  = 15
+    quiet_mm   = size_mm / 4
+    total_mm   = size_mm + 2 * quiet_mm          # printed bitmap incl. quiet zone
+    gap_mm     = 10                              # space between tiles for the ID label
+    cell_mm    = total_mm + gap_mm
+    cols       = max(1, int((page_w_mm - 2 * margin_mm) // cell_mm))
+
+    for i, mid in enumerate(ids):
+        row, col = divmod(i, cols)
+        x_mm = margin_mm + col * cell_mm
+        y_top_mm = page_h_mm - margin_mm - row * (cell_mm + 6)   # +6 for label row
+        y_bot_mm = y_top_mm - total_mm
+        c.drawImage(ImageReader(make_marker_image(mid, size_mm)),
+                    x_mm * mm, y_bot_mm * mm,
+                    width=total_mm * mm, height=total_mm * mm)
+        c.setFont("Helvetica", 7)
+        c.drawString(x_mm * mm, (y_bot_mm - 3) * mm,
+                     f"ID {mid}  {size_mm:.0f}mm")
+        c.setDash(2, 2); c.setLineWidth(0.2)
+        c.rect(x_mm * mm, y_bot_mm * mm, total_mm * mm, total_mm * mm)
+        c.setDash()
+
+    # One verification ruler at the bottom of the page.
+    draw_ruler(c, margin_mm, margin_mm, length_mm=25)
+    c.setFont("Helvetica", 9)
+    spec = f"ArUco DICT_4X4_50  {size_mm:.0f} mm  IDs {ids}"
+    if label:
+        spec = f"{label}  —  {spec}"
+    c.drawString(margin_mm * mm, (margin_mm + 6) * mm, spec)
+    c.showPage()
+    c.save()
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--ids",  type=int, nargs="+", default=[0, 1, 2, 3])
     p.add_argument("--size", type=float, default=25.0, help="marker side length in mm")
     p.add_argument("--label", type=str, default=None,
                    help="optional role text printed beside the spec, e.g. 'BASE HEADING'")
+    p.add_argument("--sheet", action="store_true",
+                   help="tile all IDs on ONE page (good for small tip markers)")
     args = p.parse_args()
 
     out_dir = Path(__file__).parent / "markers"
     out_dir.mkdir(exist_ok=True)
+
+    if args.sheet:
+        stem = f"aruco_sheet_{int(args.size)}mm_ids" + "-".join(str(i) for i in args.ids)
+        sheet_path = out_dir / f"{stem}.pdf"
+        write_sheet(args.ids, args.size, sheet_path, label=args.label)
+        print(f"  wrote {sheet_path}")
+        print()
+        print("Print at 100 % / 'Actual Size'. Verify the bottom ruler reads 25 mm.")
+        return
 
     for mid in args.ids:
         stem    = f"aruco_id{mid:02d}_{int(args.size)}mm"
