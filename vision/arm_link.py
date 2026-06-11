@@ -1,11 +1,15 @@
 """
 Pi-side serial link to the arm Mega over USB.
 
-Wraps pyserial and maps Python calls onto the single-letter commands the
-arm's USB-serial parser already understands (see arm_mega/main.cpp:394):
+Wraps pyserial and maps Python calls onto the newline-terminated commands
+the arm's USB-serial parser understands (see arm_mega handleUsbCommand):
     p  -> pickup sequence    x  -> abort
     h  -> home               a  -> toggle auto mode
-    ?  -> status dump
+    ?  -> status dump        v  -> hover (lift to approach pose)
+    b<deg> -> set base angle absolutely (visual-servo nudge)
+
+Commands are newline-terminated — the Mega's parser is line-buffered now
+(so b<deg> can carry a multi-digit argument), so a bare byte won't run.
 
 Auto-detects the Mega by USB VID/PID so /dev/ttyACMx ordering doesn't
 matter (controller and arm both enumerate as ACM*; only VID/PID is stable).
@@ -106,22 +110,37 @@ class ArmLink:
         if buf.strip():
             yield buf.decode(errors="replace").rstrip("\r")
 
+    def send_line(self, text: str) -> None:
+        """Write a newline-terminated command line to the arm. The Mega's
+        parser dispatches on CR/LF, so every command goes through here."""
+        self.send_raw(f"{text}\n".encode())
+
     # ---- high-level commands ----------------------------------------
     def pickup(self) -> None:
-        self.send_raw(b"p")
+        self.send_line("p")
 
     def abort(self) -> None:
-        self.send_raw(b"x")
+        self.send_line("x")
 
     def home(self) -> None:
-        self.send_raw(b"h")
+        self.send_line("h")
 
     def toggle_auto(self) -> None:
-        self.send_raw(b"a")
+        self.send_line("a")
+
+    def hover(self) -> None:
+        """Lift to the approach/hover pose (auto mode only). Base is left
+        where it is so a following base() call can aim it over the rock."""
+        self.send_line("v")
+
+    def base(self, deg: int) -> None:
+        """Set the base angle absolutely (auto mode only) — the visual-servo
+        nudge. Clamped to the arm's base limits on the firmware side."""
+        self.send_line(f"b{int(deg)}")
 
     def status(self, wait: float = 0.5) -> dict | None:
         """Send '?' and return parsed state, or None if no response."""
-        self.send_raw(b"?")
+        self.send_line("?")
         for line in self.messages(timeout=wait):
             m = _STATUS_RE.search(line)
             if m:
@@ -145,8 +164,8 @@ class ArmLink:
 
 def _repl() -> None:
     """Interactive shell — useful for verifying the link by hand."""
-    print("arm_link REPL — commands: p=pickup  x=abort  h=home  "
-          "a=toggle auto  ?=status  q=quit")
+    print("arm_link REPL — commands: p=pickup  x=abort  h=home  a=toggle auto "
+          " v=hover  b<deg>=base  ?=status  q=quit")
     with ArmLink() as arm:
         print(f"Connected on {arm.port} @ {arm.baud}")
         while True:
@@ -162,8 +181,11 @@ def _repl() -> None:
             if cmd == "?":
                 print(arm.status())
                 continue
-            if cmd in {"p", "x", "h", "a"}:
-                arm.send_raw(cmd.encode())
+            # Single-letter commands, or b<deg> with an integer argument.
+            if cmd in {"p", "x", "h", "a", "v"} or (
+                cmd.startswith("b") and cmd[1:].strip().lstrip("-").isdigit()
+            ):
+                arm.send_line(cmd)
                 for line in arm.messages(timeout=0.5):
                     print(f"  {line}")
                 continue
