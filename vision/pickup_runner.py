@@ -17,6 +17,7 @@ Flow (matches the firmware's auto-mode command surface)
     6. nudge the base until the claw is over the spot 'b<deg>' loop -> SERVOING
     7. hold aligned over the spot                     ALIGNED
     8. grasp the rock + drop it on the red-tape zone  'g' -> GRASPING -> home
+    9. confirm the rock left the pickup spot           VERIFYING -> OK / FAILED
 
 Spot vs rock
 ------------
@@ -52,6 +53,7 @@ State machine
     SERVOING    nudging the base toward the spot's bearing
     ALIGNED     claw is over the spot (|Δbase| < ALIGN_DEG) — holding
     GRASPING    firmware grasp+drop sequence running; waiting for '[seq] done'
+    VERIFYING   homed; checking the spot is clear (rock was carried away)
     COOLDOWN    short pause before the next cycle
 
 Controls
@@ -129,6 +131,15 @@ AUTO_GRASP = True
 # Generous: the sequence descends, grasps, lifts (interlock-paced), swings to
 # the drop zone, lowers, releases and lifts out — all at 60 deg/s with dwells.
 GRASP_TIMEOUT_S = 40.0
+
+# ---- Pickup verification ---------------------------------------------------
+# After the grasp+drop, home the arm (clears the pickup spot) and re-check the
+# spot: a successful grasp carried the rock away, so the spot should now be
+# EMPTY. A rock still sitting on the X means the grasp missed / dropped it.
+# Uses the same shape-gated find_rock, so the red drop tape can't fool it.
+VERIFY_TIMEOUT_S = 14.0     # max wait for the arm to reach home before sampling
+VERIFY_FRAMES    = 10       # frames to sample the spot once home
+VERIFY_PRESENT_M = 4        # >= this many "rock on spot" of those => FAILED
 
 # ---- Visual-servo loop -----------------------------------------------------
 # ArUco marker roles: 0-3 are stuck on the arm (elbow spine) and estimate the
@@ -292,6 +303,10 @@ class RunnerState:
     last_status_poll: float = 0.0
     # Set when the arm reports '[seq] done' — the grasp+drop has finished.
     grasp_done: bool = False
+    # Pickup verification (VERIFYING): sample the spot once the arm is home.
+    verify_count: int = 0            # frames sampled so far
+    verify_present: int = 0          # of those, how many saw a rock on the spot
+    last_pickup_ok: bool | None = None   # result of the last verification, for the HUD
 
 # The base pivot is fixed in the camera frame, so we calibrate it once (click)
 # and persist it next to the refs. Far more robust than per-frame disc detection.
@@ -484,6 +499,15 @@ def start_grasp(state: RunnerState, arm: "ArmLink | None", now: float) -> None:
         print("[pickup_runner] (dry run) would grasp+drop")
     transition(state, "GRASPING")
 
+def start_verify(state: RunnerState, arm: "ArmLink | None") -> None:
+    """Home the arm, then enter VERIFYING to re-check the (now clear) spot."""
+    if arm is not None:
+        arm.home()
+    state.at_home = False        # force a fresh at-home confirm, ignore stale '?'
+    state.verify_count = 0
+    state.verify_present = 0
+    transition(state, "VERIFYING")
+
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
@@ -496,6 +520,7 @@ STATE_COLOURS = {
     "SERVOING": (255, 140,   0),
     "ALIGNED":  (  0, 255,   0),
     "GRASPING": (200, 100, 255),
+    "VERIFYING":(255, 200,   0),
     "CALIB":    (255,   0, 255),
     "COOLDOWN": (130, 130, 200),
 }
@@ -826,15 +851,30 @@ def main() -> None:
                 # '[seq] done', then home and cool down. Time-boxed so a missed
                 # 'done' line can't strand the runner here forever.
                 if state.grasp_done:
-                    print("[pickup_runner] grasp+drop done — homing")
-                    if arm is not None:
-                        arm.home()
-                    transition(state, "COOLDOWN")
+                    print("[pickup_runner] grasp+drop done — homing to verify pickup")
+                    start_verify(state, arm)
                 elif now_t - state.state_started > GRASP_TIMEOUT_S:
-                    print("[pickup_runner] grasp+drop timeout — homing + backing off")
-                    if arm is not None:
-                        arm.home()
-                    transition(state, "COOLDOWN")
+                    print("[pickup_runner] grasp+drop timeout — homing + verifying")
+                    start_verify(state, arm)
+            elif state.name == "VERIFYING":
+                # Wait for the arm to reach home (spot unoccluded), then sample
+                # the spot. Rock still there => the grasp failed.
+                waiting = (not state.at_home
+                           and now_t - state.state_started < VERIFY_TIMEOUT_S)
+                if not waiting:
+                    state.verify_count += 1
+                    if rock_on_spot:
+                        state.verify_present += 1
+                    if state.verify_count >= VERIFY_FRAMES:
+                        failed = state.verify_present >= VERIFY_PRESENT_M
+                        state.last_pickup_ok = not failed
+                        tally = f"{state.verify_present}/{state.verify_count}"
+                        if failed:
+                            print(f"[pickup_runner] PICKUP FAILED — rock still on "
+                                  f"the spot ({tally})")
+                        else:
+                            print(f"[pickup_runner] PICKUP OK — spot clear ({tally})")
+                        transition(state, "COOLDOWN")
             elif state.name == "CALIB":
                 pass   # hold the hover pose; user jogs base (n/m) then presses g
             elif state.name == "COOLDOWN":
@@ -902,6 +942,9 @@ def main() -> None:
                          if err_px is not None else f"  on rock{tail}")
             elif state.name == "GRASPING":
                 extra = f"  ({now_t - state.state_started:3.1f}s)  running keyframes"
+            elif state.name == "VERIFYING":
+                extra = ("  homing to clear the spot..." if not state.at_home
+                         else f"  checking spot ({state.verify_count}/{VERIFY_FRAMES})")
             elif state.name == "CALIB":
                 extra = "  hover hold (jog base n/m; SPACE=servo)"
             elif state.name == "COOLDOWN":
@@ -924,6 +967,16 @@ def main() -> None:
             cv2.putText(frame, f"err={errtxt}",
                         (CAM_W - 175, 64), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
                         (200, 200, 120), 1, cv2.LINE_AA)
+
+            # Pickup-verification verdict banner (shown through VERIFYING result
+            # + the COOLDOWN after it, so the operator sees the last outcome).
+            if state.last_pickup_ok is not None and state.name in ("VERIFYING", "COOLDOWN"):
+                ok = state.last_pickup_ok
+                txt = "PICKUP OK" if ok else "PICKUP FAILED - rock still on spot"
+                col = (0, 220, 0) if ok else (0, 0, 255)
+                cv2.rectangle(frame, (0, 34), (CAM_W, 60), (25, 25, 25), -1)
+                cv2.putText(frame, txt, (10, 54), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6, col, 2, cv2.LINE_AA)
 
             if state.last_arm_line:
                 cv2.putText(frame, f"arm: {state.last_arm_line[:54]}",
