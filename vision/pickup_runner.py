@@ -16,7 +16,7 @@ Flow (matches the firmware's auto-mode command surface)
     5. lift to the hover pose                         'v'  -> HOVERING
     6. nudge the base until the claw is over the spot 'b<deg>' loop -> SERVOING
     7. hold aligned over the spot                     ALIGNED
-    (8. grasp + drop — TODO, see note below)
+    8. grasp the rock + drop it on the red-tape zone  'g' -> GRASPING -> home
 
 Spot vs rock
 ------------
@@ -34,11 +34,14 @@ marker moves and the geometry stays stable:
 
     Δbase = atan2(spot − centre) − atan2(claw − centre)
 
-NOTE on step 8: firing 'p' from the hover pose is not wired yet — the current
-PICKUP_SEQUENCE starts at KF_HOME (would undo the alignment) and seqStart()
-requires being at home. A grasp-from-aligned-hover keyframe set (recorded at
-the final rig, preserving the servoed base) is the next step. For now the
-runner stops at ALIGNED — the "claw aligned over the pickup spot" deliverable.
+Step 8 (grasp + drop): once ALIGNED, the firmware 'g' command runs the
+GRASP_DROP_SEQUENCE from the current hover pose. Its pickup-phase keyframes
+carry base == BASE_KEEP so the servoed alignment is PRESERVED through the
+descend/close/lift; the drop phase then snaps the base to the fixed B_DROP
+over the red-tape drop zone and releases. The arm emits '[seq] done' when it
+finishes, after which the runner homes and cools down. During bring-up this is
+gated behind the 'p' key (AUTO_GRASP=False); flip AUTO_GRASP to True once the
+GRASP_DROP keyframes are recorded so the whole cycle runs from one SPACE.
 
 State machine
 -------------
@@ -48,11 +51,13 @@ State machine
     HOVERING    'v' sent — waiting HOVER_SETTLE_S for the arm to lift
     SERVOING    nudging the base toward the spot's bearing
     ALIGNED     claw is over the spot (|Δbase| < ALIGN_DEG) — holding
+    GRASPING    firmware grasp+drop sequence running; waiting for '[seq] done'
     COOLDOWN    short pause before the next cycle
 
 Controls
 --------
     SPACE   authorise (READY -> HOVERING); in ALIGNED, re-run the servo
+    P       in ALIGNED, fire the grasp+drop sequence (the bring-up gate)
     K       lock / unlock the pickup spot (auto-locks after SPOT_LOCK_FRAMES)
     F       flip the base-servo sign (polarity unknown until bring-up)
     [ / ]   trim the claw-bearing offset phi -/+ 5 deg (the elbow-spine
@@ -113,6 +118,17 @@ ROCK_DEBOUNCE_M = 2
 
 # Pause after a cycle before we'll accept the next trigger.
 COOLDOWN_S = 3.0
+
+# Grasp+drop (the firmware 'g' sequence) runs once the claw is ALIGNED over the
+# rock. Keep AUTO_GRASP False for first hardware bring-up so this brand-new
+# motion near the table is gated behind a keypress ('p' in ALIGNED); flip it to
+# True once the GRASP_DROP keyframes are dialled in for the hands-off flow
+# (one SPACE in READY then everything runs through to home).
+AUTO_GRASP = True
+# Give up waiting for the arm's '[seq] done' after this long and home anyway.
+# Generous: the sequence descends, grasps, lifts (interlock-paced), swings to
+# the drop zone, lowers, releases and lifts out — all at 60 deg/s with dwells.
+GRASP_TIMEOUT_S = 40.0
 
 # ---- Visual-servo loop -----------------------------------------------------
 # ArUco marker roles: 0-3 are stuck on the arm (elbow spine) and estimate the
@@ -223,7 +239,8 @@ WIN = "Pickup runner (q quit)"
 
 # Once authorised, the spot + base centre are frozen (the arm occludes both
 # the rock and the disc during hover), so these states aim from cached values.
-COMMITTED_STATES = ("HOVERING", "SERVOING", "ALIGNED")
+# GRASPING is committed too — the arm is all over the frame executing keyframes.
+COMMITTED_STATES = ("HOVERING", "SERVOING", "ALIGNED", "GRASPING")
 
 # ---------------------------------------------------------------------------
 # State machine
@@ -273,6 +290,8 @@ class RunnerState:
     auto_on: bool = False
     at_home: bool = False
     last_status_poll: float = 0.0
+    # Set when the arm reports '[seq] done' — the grasp+drop has finished.
+    grasp_done: bool = False
 
 # The base pivot is fixed in the camera frame, so we calibrate it once (click)
 # and persist it next to the refs. Far more robust than per-frame disc detection.
@@ -451,6 +470,20 @@ def start_servoing(state: RunnerState, now: float) -> None:
     state.servo_steps = 0
     state.servo_progress_t = now          # start the blind-timeout clock now
 
+def start_grasp(state: RunnerState, arm: "ArmLink | None", now: float) -> None:
+    """Fire the firmware grasp+drop ('g') and wait for it in GRASPING.
+
+    The base is held at the servoed angle through the pickup phase by the
+    firmware (base == BASE_KEEP keyframes), so we just launch and watch for
+    '[seq] done' on the wire (see the drain loop)."""
+    state.grasp_done = False
+    if arm is not None:
+        arm.grasp()
+        print("[pickup_runner] -> grasp+drop (g)")
+    else:
+        print("[pickup_runner] (dry run) would grasp+drop")
+    transition(state, "GRASPING")
+
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
@@ -462,6 +495,7 @@ STATE_COLOURS = {
     "HOVERING": (255, 200,   0),
     "SERVOING": (255, 140,   0),
     "ALIGNED":  (  0, 255,   0),
+    "GRASPING": (200, 100, 255),
     "CALIB":    (255,   0, 255),
     "COOLDOWN": (130, 130, 200),
 }
@@ -541,8 +575,8 @@ def main() -> None:
     # (a down-pointed arm reads as a dark blob and gets picked as the X).
     transition(state, "IDLE" if arm is None else "HOMING")
     print("[pickup_runner] running — homing, then clear the rock so the SPOT "
-          "locks and drop it on the X.\n  SPACE=go  K=lock spot  F=flip sign  "
-          "H=home  A=auto  X=abort  L=log  Q=quit")
+          "locks and drop it on the X.\n  SPACE=go  P=grasp+drop  K=lock spot  "
+          "F=flip sign  H=home  A=auto  X=abort  L=log  Q=quit")
 
     try:
         while True:
@@ -574,6 +608,8 @@ def main() -> None:
                 if ms:
                     state.auto_on = ms.group(1) == "ON"
                     state.at_home = ms.group(2) == "yes"
+                if "[seq] done" in line:
+                    state.grasp_done = True
                 print(f"  [arm] {line}")
 
             # ---- home FIRST: wait for the auto-on home before touching vision ----
@@ -776,11 +812,29 @@ def main() -> None:
                         else:
                             print(f"[pickup_runner] (dry) err={err_px:.0f}px J={jstr} -> b{new_base}")
             elif state.name == "ALIGNED":
+                if AUTO_GRASP:
+                    # Hands-off flow: go straight into the grasp+drop.
+                    start_grasp(state, arm, now_t)
                 # Sticky: only re-servo if the error grows well past where we
                 # settled (a real rock move), not on detection noise or the
                 # unfixable residual — otherwise it flickers ALIGNED<->SERVOING.
-                if err_px is not None and err_px > state.aligned_err + RESERVO_MARGIN_PX:
+                elif err_px is not None and err_px > state.aligned_err + RESERVO_MARGIN_PX:
                     start_servoing(state, now_t)
+            elif state.name == "GRASPING":
+                # Arm is executing the firmware keyframe sequence (no vision in
+                # the loop — base is held, then snaps to the drop zone). Wait for
+                # '[seq] done', then home and cool down. Time-boxed so a missed
+                # 'done' line can't strand the runner here forever.
+                if state.grasp_done:
+                    print("[pickup_runner] grasp+drop done — homing")
+                    if arm is not None:
+                        arm.home()
+                    transition(state, "COOLDOWN")
+                elif now_t - state.state_started > GRASP_TIMEOUT_S:
+                    print("[pickup_runner] grasp+drop timeout — homing + backing off")
+                    if arm is not None:
+                        arm.home()
+                    transition(state, "COOLDOWN")
             elif state.name == "CALIB":
                 pass   # hold the hover pose; user jogs base (n/m) then presses g
             elif state.name == "COOLDOWN":
@@ -843,8 +897,11 @@ def main() -> None:
                 extra = (f"  err={err_px:.0f}px" if err_px is not None
                          else "  (tip marker not visible)")
             elif state.name == "ALIGNED":
-                extra = (f"  err={err_px:.0f}px  on rock"
-                         if err_px is not None else "  on rock")
+                tail = "  press P to grasp+drop" if not AUTO_GRASP else ""
+                extra = (f"  err={err_px:.0f}px  on rock{tail}"
+                         if err_px is not None else f"  on rock{tail}")
+            elif state.name == "GRASPING":
+                extra = f"  ({now_t - state.state_started:3.1f}s)  running keyframes"
             elif state.name == "CALIB":
                 extra = "  hover hold (jog base n/m; SPACE=servo)"
             elif state.name == "COOLDOWN":
@@ -895,6 +952,11 @@ def main() -> None:
                 # or finishing a calibration).
                 print("[pickup_runner] -> re-servo")
                 start_servoing(state, now_t)
+            elif key == ord("p") and state.name == "ALIGNED":
+                # Bring-up gate for the grasp+drop (see AUTO_GRASP). Once the
+                # GRASP_DROP keyframes are dialled in, set AUTO_GRASP = True and
+                # this fires automatically out of ALIGNED.
+                start_grasp(state, arm, now_t)
             elif key == ord("v") and arm is not None:
                 # Enter phi-calibration: park at the HOVER pose and hold (no auto
                 # servo) so phi is captured at the exact pose it will servo at.

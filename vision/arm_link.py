@@ -7,6 +7,7 @@ the arm's USB-serial parser understands (see arm_mega handleUsbCommand):
     h  -> home               a  -> toggle auto mode
     ?  -> status dump        v  -> hover (lift to approach pose)
     b<deg> -> set base angle absolutely (visual-servo nudge)
+    g  -> grasp+drop from the current (servoed hover) pose
 
 Commands are newline-terminated — the Mega's parser is line-buffered now
 (so b<deg> can carry a multi-digit argument), so a bare byte won't run.
@@ -138,6 +139,13 @@ class ArmLink:
         nudge. Clamped to the arm's base limits on the firmware side."""
         self.send_line(f"b{int(deg)}")
 
+    def grasp(self) -> None:
+        """Run the grasp+drop sequence from the current (servoed hover) pose.
+        Auto mode only. The firmware holds the visually-servoed base through
+        the pickup phase, then snaps to the fixed drop-zone base. The arm
+        emits '[seq] done' when the whole sequence finishes."""
+        self.send_line("g")
+
     def status(self, wait: float = 0.5) -> dict | None:
         """Send '?' and return parsed state, or None if no response."""
         self.send_line("?")
@@ -164,8 +172,8 @@ class ArmLink:
 
 def _repl() -> None:
     """Interactive shell — useful for verifying the link by hand."""
-    print("arm_link REPL — commands: p=pickup  x=abort  h=home  a=toggle auto "
-          " v=hover  b<deg>=base  ?=status  q=quit")
+    print("arm_link REPL — commands: p=pickup  g=grasp+drop  x=abort  h=home "
+          " a=toggle auto  v=hover  b<deg>=base  ?=status  q=quit")
     with ArmLink() as arm:
         print(f"Connected on {arm.port} @ {arm.baud}")
         while True:
@@ -182,7 +190,7 @@ def _repl() -> None:
                 print(arm.status())
                 continue
             # Single-letter commands, or b<deg> with an integer argument.
-            if cmd in {"p", "x", "h", "a", "v"} or (
+            if cmd in {"p", "g", "x", "h", "a", "v"} or (
                 cmd.startswith("b") and cmd[1:].strip().lstrip("-").isdigit()
             ):
                 arm.send_line(cmd)

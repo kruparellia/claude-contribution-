@@ -242,8 +242,15 @@ static SeqState seqState     = SeqState::IDLE;
 // throughout. Triggered by FLAG_HOME from the controller or the USB 'h'.
 enum class HomeState : uint8_t { IDLE, FOLD, LIFT, PLACE };
 static HomeState homeState   = HomeState::IDLE;
-static uint8_t  seqIndex     = 0;            // index into PICKUP_SEQUENCE[]
+static uint8_t  seqIndex     = 0;            // index into the active sequence[]
 static uint32_t seqEnteredMs = 0;            // millis() when current state began
+
+// The sequence runner can walk either the canned PICKUP_SEQUENCE (USB 'p',
+// home->pick->drop->home) or the GRASP_DROP_SEQUENCE (USB 'g', run from the
+// servoed hover). Both share seqTick()/seqApplyKeyframe() via this pointer so
+// there's one state machine, not two. Defaults to the pickup sequence.
+static const Pose* activeSeq    = PICKUP_SEQUENCE;
+static uint8_t     activeSeqLen = PICKUP_SEQUENCE_LEN;
 static bool     seqAutoMode  = false;        // false = triggers are ignored
 // millis() at the last frame whose delta exceeded SEQ_OVERRIDE_DEG.
 // Updated by applyFrame() and read by controllerIdle() / the 'a' handler
@@ -262,8 +269,11 @@ static inline bool controllerIdle() {
 // the link-timeout check in loop() doesn't snap targets back to current
 // and freeze us mid-sequence.
 static void seqApplyKeyframe(uint8_t i) {
-    const Pose& kf = PICKUP_SEQUENCE[i];
-    axes[0].target = clampTo(kf.base,     axes[0].lim);
+    const Pose& kf = activeSeq[i];
+    // base == BASE_KEEP means "hold the base wherever it is" — used by the
+    // grasp+drop sequence to preserve the visually-servoed alignment.
+    if (kf.base != BASE_KEEP)
+        axes[0].target = clampTo(kf.base, axes[0].lim);
     axes[1].target = clampTo(kf.shoulder, axes[1].lim);
     axes[2].target = clampTo(kf.elbow,    axes[2].lim);
     axes[3].target = clampTo(kf.claw,     axes[3].lim);
@@ -316,12 +326,43 @@ static void seqStart() {
         Serial.println(F("[seq] not at home — type 'h' first"));
         return;
     }
+    activeSeq    = PICKUP_SEQUENCE;
+    activeSeqLen = PICKUP_SEQUENCE_LEN;
     seqIndex     = 0;
     seqState     = SeqState::MOVING;
     seqEnteredMs = millis();
     seqApplyKeyframe(seqIndex);
     Serial.print(F("[seq] start ("));
-    Serial.print(PICKUP_SEQUENCE_LEN);
+    Serial.print(activeSeqLen);
+    Serial.println(F(" keyframes)"));
+}
+
+// Start the grasp+drop sequence from the CURRENT pose (the servoed hover) —
+// the Pi calls this once pickup_runner has aligned the claw over the rock.
+// Unlike seqStart() there is NO at-home gate (we deliberately start mid-air),
+// and the pickup-phase keyframes carry base == BASE_KEEP so the servoed base
+// is preserved. Auto-mode only; refuses if a sequence or staged home is busy.
+static void seqStartGrasp() {
+    if (seqState != SeqState::IDLE) {
+        Serial.println(F("[seq] already running"));
+        return;
+    }
+    if (!seqAutoMode) {
+        Serial.println(F("[seq] auto mode OFF — type 'a' to arm"));
+        return;
+    }
+    if (homeState != HomeState::IDLE) {
+        Serial.println(F("[seq] busy (home)"));
+        return;
+    }
+    activeSeq    = GRASP_DROP_SEQUENCE;
+    activeSeqLen = GRASP_DROP_SEQUENCE_LEN;
+    seqIndex     = 0;
+    seqState     = SeqState::MOVING;
+    seqEnteredMs = millis();
+    seqApplyKeyframe(seqIndex);
+    Serial.print(F("[seq] grasp+drop start ("));
+    Serial.print(activeSeqLen);
     Serial.println(F(" keyframes)"));
 }
 
@@ -345,7 +386,7 @@ static void seqTick() {
     if (now - seqEnteredMs < SEQ_DWELL_MS) return;
 
     seqIndex++;
-    if (seqIndex >= PICKUP_SEQUENCE_LEN) {
+    if (seqIndex >= activeSeqLen) {
         seqState = SeqState::IDLE;
         Serial.println(F("[seq] done"));
         return;
@@ -606,6 +647,7 @@ static void logPositions() {
 //   ?          status dump
 //   v          hover: lift to the approach pose, leaving base untouched
 //   b<deg>     set base angle absolutely  (Pi visual-servo nudge)
+//   g          grasp+drop from the current (servoed hover) pose
 //
 // 'v' and 'b<deg>' are the visual-servo primitives: the Pi sends 'v' to
 // raise the arm into the hover pose over the pickup zone, then streams
@@ -624,6 +666,11 @@ static void handleUsbCommand(char* line) {
     switch (cmd) {
         case 'p':
             seqStart();
+            break;
+        case 'g':
+            // Grasp+drop from the current servoed hover (the Pi's ALIGNED
+            // state). seqStartGrasp() enforces auto-mode + not-busy itself.
+            seqStartGrasp();
             break;
         case 'x':
             seqAbort(F("user 'x'"));
